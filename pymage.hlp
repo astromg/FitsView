@@ -1,0 +1,77 @@
+<b><font color="blue">Pymage v. 0.99</font> help</b><br>
+<i>7.12.2020 Marek Gorski</i><br>
+<br>
+./pymage.py plik.fits <br>
+<b>or</b> <br>
+./pymage.py plik.fits 400 500 <i># mark point</i><br>
+./pymage.py plik.fits plik.out <i># mark all point from plik.out</i> <br>
+
+<ol>
+
+<h4>Basic functions and layout of the program.</h4>
+Fits file is displayed as the <font color="blue">image</font> with the possibility to adjast contrast level with sliders on the left. 
+On the right side the upper window shows <font color="blue">vievfinder</font> window with <font color="blue">aperture</font> marked as the green circle. 
+Below is the <font color="blue">thumbnail</font> of the main image. You can <font color="blue">zoom</font> with the slider below this window. You can navigate by left-clicking on the main image, 
+or by left-clicking on the thumbnail. 
+<br>  
+You can <font color="green">flip</font> the image in X and Y axis, and <font color="green">rotate</font> the image by 90 deg. Those operations <b>do not change</b> the working coordinates of the image. 
+<br>
+Other options are rather obvious. 
+<br>
+
+
+
+<h4>Keybord functions</h4>
+<i>When the main window is active and pointer is hovering over the image, pressing specific <b>key</b> will activate the function.
+Result will be displayed in a <b>Querry Window</b>, or other specific window. Numeric result will be printed in short version to a <b>terminal</b>. </i>
+
+<ul>
+
+<li><b>m</b> : mark point on the image</li>
+<li><b>d</b> : delete marker on the image</li>
+<li><b>g</b> : goto - put x and y coordinates in a popup dialog window. Marker will be set on this coordinates and image will be centered on this point </li>
+<li><b>f</b> : find - if coordinate file was loaded, the line from this file with the closest coordinates is printed. </li>
+<li><b>b</b> : background - measure background in counts/pixel. Measuremetn is averaged from the viefinder aperture. Use before <b>q</b> and <b>z</b> functions  </li>
+<li><b>z</b> : zero-point - set up a zero point for magnitude calculations. Press over the star with known magnitude, and put this magnitude in a popup dialog window.</li>
+<li><b>q</b> : querry - get total counts in the vievfinder aperture. If background measuremtn was performed before, background will be subtracted. If zero-point was set-up, magnitude will be calculated with respect to the zero-point.  </li>
+<li><b>c</b> : column - count profile in a specific column is plotted. If used with zoomed image, only visible part of the column is plotted.</li>
+<li><b>l</b> : line - count profile in a specific line is plotted. If used with zoomed image, only visible part of the line is plotted.</li>
+<li><b>e</b> : eeee - izophots of part of the image are plotted.</li>
+<li><b>r</b> : radial profile of counts is plotted. The centroid is calculated and Gauss function is fitted with the resulting FWHM.</li>
+                 
+</ul>
+
+<h4>Configuration</h4>
+Number of setting can be set up, and will be used with the next runn of the script. To <b>save those setting</b>, in the Config 
+window <b>activate checkbox</b> specific value. 
+This value is written and reed from the config file (<b>pymage.cfg</b>). By removing particular line from this file, the default value is adopted. Any
+of the configuration values can be passed to the program with the <font color="green">Widget approach</font>, as the cfg list passed as the argument of the Widget. 
+
+<h4>Widget</h4>
+You can run this script as the part of other python scripts as the Widget.<br>
+Example: <br><br> 
+<i> from pymage_gui import * </i> # load Pymage class to Your script <br> <br> 
+<i> cfg=["x_Col=1","y_Col=2"] </i> # set up desired configuration. <br><br> 
+<i> PM_window = PyMage(cfg) </i> # run the Pymage Widget class <br><br> 
+<i> PM_window.fname="plik.fits"  </i> # define FITS file name <br><br> 
+<i> PM_window.newFits() </i> # execute new fits <br><br> 
+<i> PM_window.coo_file="plik.coo" </i> # define file with object coordinates <br><br> 
+<i> PM_window.load_coo() </i> # execute new coo file <br>
+
+
+<h4>Libraries:</h4>
+Python2.7<br>
+Astropy<br>
+NumPy<br>
+SciPy<br>
+matplotlib<br>
+PyQt4<br>
+
+<h4>Issues & ToDo:</h4>
+<ul>
+<li> x function <br>
+</ul>
+
+
+</ol>
+
