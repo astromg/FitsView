@@ -109,11 +109,11 @@ class Image(QWidget):
           self.showM_c.show()
           self.cmap_l.show()
           self.cmap_s.show()   
-          #self.min_e.show()
-          #self.min_s.show()
-          #self.max_e.show()
-          #self.max_s.show()
-          #self.auto_p.show()
+          self.min_e.show()
+          self.min_s.show()
+          self.max_e.show()
+          self.max_s.show()
+          self.auto_p.show()
           self.optiones=False
        else:    
           self.shopt_p.setText("Show optiones")     
@@ -126,11 +126,11 @@ class Image(QWidget):
           self.showM_c.hide()
           self.cmap_l.hide()
           self.cmap_s.hide()  
-          #self.min_e.hide()
-          #self.min_s.hide()
-          #self.max_e.hide()
-          #self.max_s.hide()
-          #self.auto_p.hide()
+          self.min_e.hide()
+          self.min_s.hide()
+          self.max_e.hide()
+          self.max_s.hide()
+          self.auto_p.hide()
           self.optiones=True
 
 
@@ -167,8 +167,7 @@ class Image(QWidget):
        
        if self.parent.cfg_showsat:
           sat = float(self.parent.cfg_saturation)
-          #dane2[dane>=sat]="nan"
-          #DUPA2
+          dane2[dane>=sat]="nan"
           mymap.set_bad("red")
        
        self.image = self.axes.imshow(dane2,cmap=mymap,vmin=vmin, vmax=vmax,interpolation="None")
@@ -230,8 +229,7 @@ class Image(QWidget):
 
        if self.parent.cfg_showsat:
           sat = float(self.parent.cfg_saturation)
-          #dane2[dane>=sat]="nan"
-          #DUPA2
+          dane2[dane>=sat]="nan"
           mymap.set_bad("red")       
      
        self.axes_viewfinder.clear()
@@ -244,11 +242,14 @@ class Image(QWidget):
    def clim_auto(self): 
        c0 = numpy.median(self.dane,axis=None)
        c_sigma=numpy.std(self.dane,axis=None)
+       self.min_e.setText("%i"%(c0-5*c_sigma))
+       self.max_e.setText("%i"%(c0+5*c_sigma))
+       a=self.min_e.text()
+       b=self.max_e.text()
+       self.min_s.setRange(int(float(a)),int(float(b)))
+       self.max_s.setRange(int(float(a)),int(float(b)))
        self.min_s.setValue(c0-c_sigma)
        self.max_s.setValue(c0+c_sigma)
-       self.min_e.setText(str(c0-c_sigma))
-       self.max_e.setText(str(c0+c_sigma))
-
 
    def fit_image(self):
        self.zoom_s.setValue(1)
@@ -382,16 +383,12 @@ class Image(QWidget):
        vmax=self.max_s.value()
        
        if vmin>vmax: 
-          vmax=vmin+1
+          vmax=vmin+0.1
           self.max_s.setValue(vmax)
-          #self.zmiana_clim()
-       
+        
        self.image.set_clim(vmin=vmin,vmax=vmax)
        self.image_viewfinder.set_clim(vmin=vmin,vmax=vmax)
        self.image_small.set_clim(vmin=vmin,vmax=vmax)
-       
-       self.min_e.setText(str(vmin))
-       self.max_e.setText(str(vmax))
        self.canvas.draw()
        self.canvas_viewfinder.draw()
        self.canvas_small.draw()
@@ -401,16 +398,12 @@ class Image(QWidget):
        vmax=self.max_s.value()
        
        if vmax<vmin: 
-          vmin=vmax-1
+          vmin=vmax-0.1
           self.min_s.setValue(vmin)
-          #self.zmiana_clim()
        
        self.image.set_clim(vmin=vmin,vmax=vmax)
        self.image_viewfinder.set_clim(vmin=vmin,vmax=vmax)
        self.image_small.set_clim(vmin=vmin,vmax=vmax)       
-       
-       self.min_e.setText(str(vmin))
-       self.max_e.setText(str(vmax))
        self.canvas.draw()
        self.canvas_viewfinder.draw()
        self.canvas_small.draw()
@@ -806,7 +799,8 @@ class Image(QWidget):
 
    def mkUI(self):       
 
-       self.coor_l=QLabel("")           
+       self.coor_l=QLabel()
+       #self.coor_l=QLineEdit()          
 
        self.shopt_p = QPushButton('Show Optiones')
 
@@ -819,7 +813,7 @@ class Image(QWidget):
 
        self.cmap_l=QLabel("Cmap: ")
        self.cmap_s=QComboBox()
-       self.cmap_s.addItems(['gray','binary', 'spectral','gist_heat', 'seismic','viridis'])
+       self.cmap_s.addItems(['gray','binary','gist_heat', 'seismic','viridis'])
        
        self.saturation_c = QCheckBox("Saturation")
        self.saturation_c.setChecked(True)       
@@ -831,15 +825,23 @@ class Image(QWidget):
        
        self.fitI_p =  QPushButton('Fit Image')
        
-       self.min_e= QLineEdit()
-       self.min_e.setReadOnly(True)
-       self.min_s= QSlider(QtCore.Qt.Vertical)
-       self.min_s.setRange(self.dane.min(),self.dane.max())
-       
        self.max_e= QLineEdit()
        self.max_e.setReadOnly(True)
+       self.min_e= QLineEdit()
+       self.min_e.setReadOnly(True)
+
+       c0 = numpy.median(self.dane,axis=None)
+       c_sigma=numpy.std(self.dane,axis=None)
+       self.min_e.setText("%i"%(c0-5*c_sigma))
+       self.max_e.setText("%i"%(c0+5*c_sigma))
+       a=self.min_e.text()
+       b=self.max_e.text()
+
+       self.min_s= QSlider(QtCore.Qt.Vertical)
+       self.min_s.setRange(int(float(a)),int(float(b)))
+
        self.max_s= QSlider(QtCore.Qt.Vertical)
-       self.max_s.setRange(self.dane.min(),self.dane.max())
+       self.max_s.setRange(int(float(a)),int(float(b)))
        
        self.auto_p =  QPushButton('Auto')
        
@@ -887,14 +889,15 @@ class Image(QWidget):
        grid.addWidget(self.max_e,w,0,1,2)
        grid.addWidget(self.canvas,w,2,6,4)
        w=w+1
-       grid.addWidget(self.min_s,w,0,3,1)
-       grid.addWidget(self.max_s,w,1,3,1)
-       w=w+3
+       grid.addWidget(self.min_s,w,0,5,1)
+       grid.addWidget(self.max_s,w,1,5,1)
+       w=w+5
        grid.addWidget(self.min_e,w,0,1,2)  
        w=w+1
        grid.addWidget(self.auto_p,w,0,1,2)
        w=w+1
     
+       w=6
        grid.addWidget(self.flipX_c,w,2)  
        grid.addWidget(self.flipY_c,w,3)
        grid.addWidget(self.rot90_c,w,4)       
@@ -920,7 +923,9 @@ class Image(QWidget):
        grid.addWidget(self.fitI_p,4,7)
        grid.addWidget(self.shopt_p,5,6,1,2)       
 
-       
-
 
        self.setLayout(grid)
+       grid.setRowStretch(0,0)
+       grid.setRowStretch(1,1)
+       grid.setRowStretch(2,1)
+
