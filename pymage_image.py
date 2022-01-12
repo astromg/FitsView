@@ -74,6 +74,7 @@ class Image(QWidget):
        self.rot90_c.stateChanged.connect(self.zmiana_rot90)
        self.flipX_c.stateChanged.connect(self.zmiana_flipX)
        self.flipY_c.stateChanged.connect(self.zmiana_flipY)
+       self.mksize_s.valueChanged.connect(self.update)
        self.saturation_c.stateChanged.connect(self.zmiana_saturation)
        self.cmap_s.currentIndexChanged.connect(self.zmiana_cmap)
        self.saturation_e.editingFinished.connect(self.zmiana_saturation)
@@ -105,6 +106,8 @@ class Image(QWidget):
           self.flipX_c.show()
           self.flipY_c.show()
           self.rot90_c.show()
+          self.mksize_l.show()
+          self.mksize_s.show()
           self.savePic_p.show()
           self.showM_c.show()
           self.cmap_l.show()
@@ -122,6 +125,8 @@ class Image(QWidget):
           self.flipX_c.hide()
           self.flipY_c.hide()
           self.rot90_c.hide()
+          self.mksize_l.hide()
+          self.mksize_s.hide()       
           self.savePic_p.hide()
           self.showM_c.hide()
           self.cmap_l.hide()
@@ -186,15 +191,14 @@ class Image(QWidget):
        t1=time.time()
        
        if self.showM_c.checkState():
+          mksize=int(self.mksize_s.value()/10.)+1 
           if self.ext_x:
-             mksize=4
-             if len(self.ext_x)>40: mksize=2
              if self.parent.cfg_rot90: 
                 self.axes.plot(self.ext_y,float(len(dane))-numpy.array(self.ext_x),str(self.parent.cfg_extMarker).strip(),markersize=mksize)
              else: self.axes.plot(self.ext_x,self.ext_y,str(self.parent.cfg_extMarker).strip(),markersize=mksize)
 
+          mksize=mksize+2 
           if len(self.int_x)>0:
-             mksize=4
              if self.parent.cfg_rot90: 
                 self.axes.plot(self.int_y,float(len(dane))-numpy.array(self.int_x),str(self.parent.cfg_intMarker).strip(),markersize=mksize,alpha=0.5)
              else: self.axes.plot(self.int_x,self.int_y,str(self.parent.cfg_intMarker).strip(),markersize=mksize,alpha=0.5)
@@ -811,6 +815,13 @@ class Image(QWidget):
        self.rot90_c = QCheckBox("Rotate 90")
        self.rot90_c.setChecked(False)
 
+       self.mksize_l=QLabel("Marker Size:")
+       self.mksize_s= QSlider(QtCore.Qt.Horizontal)
+       self.mksize_s.setRange(0,100)
+       #self.mksize_s.setTickInterval(1)
+       self.mksize_s.setValue(25)
+       
+
        self.cmap_l=QLabel("Cmap: ")
        self.cmap_s=QComboBox()
        self.cmap_s.addItems(['gray','binary','gist_heat', 'seismic','viridis'])
@@ -906,6 +917,8 @@ class Image(QWidget):
        grid.addWidget(self.saturation_e,w,7)
        
        w=w+1
+       grid.addWidget(self.mksize_l,w,2)
+       grid.addWidget(self.mksize_s,w,3,1,2)
        grid.addWidget(self.savePic_p,w,5)  
        grid.addWidget(self.cmap_l,w,6)
        grid.addWidget(self.cmap_s,w,7)
