@@ -17,7 +17,7 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 
-from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QLabel,QCheckBox, QComboBox, QTextEdit, QLineEdit, QDialog, QTabWidget, QPushButton, QFileDialog, QGridLayout, QHBoxLayout, QVBoxLayout, QMessageBox
+from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QMessageBox, QLabel,QCheckBox, QComboBox, QTextEdit, QLineEdit, QDialog, QTabWidget, QPushButton, QFileDialog, QGridLayout, QHBoxLayout, QVBoxLayout, QMessageBox
 from PyQt5 import QtCore, QtGui
 
 
@@ -65,7 +65,7 @@ class FitsView(QWidget):
    
    def newFits(self):
 
-       if self.fname:
+       if ".fits" in self.fname:
          
           self.TabWindow.clear() 
           
@@ -81,6 +81,10 @@ class FitsView(QWidget):
           self.TabWindow.setCurrentIndex(1)
           self.TabWindow.setCurrentIndex(int(self.cfg_active_tab))
           self.updateCooList()
+       else: 
+          self.msg = QMessageBox()
+          self.msg.setText(self.fname.split("/")[-1] + " is not a FITS file")   
+          self.msg.exec_()
 
    def updateCooList(self):
        opcje = [f for f in os.listdir(self.pwd) if self.fname.replace(".fits","").split("/")[-1] in f]
