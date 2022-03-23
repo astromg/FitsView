@@ -6,3 +6,6 @@
 # Python 
 
 *.pyc
+
+# Pyenv
+.python-version

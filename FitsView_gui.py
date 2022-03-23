@@ -17,21 +17,21 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 
-from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QLabel,QCheckBox, QTextEdit, QLineEdit, QDialog, QTabWidget, QPushButton, QFileDialog, QGridLayout, QHBoxLayout, QVBoxLayout, QMessageBox
+from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QLabel,QCheckBox, QComboBox, QTextEdit, QLineEdit, QDialog, QTabWidget, QPushButton, QFileDialog, QGridLayout, QHBoxLayout, QVBoxLayout, QMessageBox
 from PyQt5 import QtCore, QtGui
 
 
-from pymage_image import *
+from FitsView_image import *
 
 warnings.simplefilter('ignore', category=AstropyWarning)
 
-class PyMage(QWidget):
+class FitsView(QWidget):
    def __init__(self,args,parent=None): 
        QWidget.__init__(self)  
       
        txt=__file__
-       if ".pyc" in txt: self.pwd=txt.strip("pymage_gui.pyc")
-       else:  self.pwd=txt.strip("pymage_gui.py")     
+       if ".pyc" in txt: self.pwd=txt.strip("FitsView_gui.pyc")
+       else:  self.pwd=txt.strip("FitsView_gui.py")     
          
        
        self.args=args
@@ -49,7 +49,7 @@ class PyMage(QWidget):
        #self.update()
        
    def initiate(self):
-       self.config_file="pymage.cfg"
+       self.config_file="FitsView.cfg"
        self.fname=False
        
        self.coo_file=False
@@ -80,9 +80,17 @@ class PyMage(QWidget):
           self.updateUI()
           self.TabWindow.setCurrentIndex(1)
           self.TabWindow.setCurrentIndex(int(self.cfg_active_tab))
+          self.updateCooList()
+
+   def updateCooList(self):
+       opcje = [f for f in os.listdir(self.pwd) if self.fname.replace(".fits","") in f]
+       opcje=["other file"]+opcje
+       opcje.remove(self.fname)
+       self.coo_l.clear()
+       self.coo_l.addItems(opcje)
+          #self.coo_l.setCurrentIndex(-1)
 
 
-          
    def open_confWindow(self):
        self.cfg_window=Settings(self)     
        try:
@@ -116,6 +124,9 @@ class PyMage(QWidget):
 
        self.coo_p = QPushButton("Load COO")
        self.coo_p.clicked.connect(self.get_coo)
+       self.coo_l=QComboBox()
+
+
 
        self.config_p = QPushButton("Configuration")
        self.config_p.clicked.connect(self.open_confWindow)
@@ -130,11 +141,15 @@ class PyMage(QWidget):
 
        grid.addWidget(self.TabWindow,3,0,4,4)
 
-       grid.addWidget(self.help_p,8,0)       
-       grid.addWidget(self.config_p,8,1)
+
+       grid.addWidget(self.load_p,8,0)
+       grid.addWidget(self.coo_p,8,1)
+       grid.addWidget(self.coo_l,8,2)
+
+       grid.addWidget(self.help_p,9,0)       
+       grid.addWidget(self.config_p,9,1)
        
-       grid.addWidget(self.load_p,9,0)
-       grid.addWidget(self.coo_p,9,1)
+
        
        grid.addWidget(self.close_p,9,3)
        grid.setSpacing(10)
@@ -143,20 +158,25 @@ class PyMage(QWidget):
 
 
    def open_help(self):
-       tmp=self.pwd+"pymage.hlp"
+       tmp=self.pwd+"FitsView.hlp"
        help_window = HelpWindow(self,tmp)
 
 
    def get_coo(self):
-       ok=False
-       try: 
-         self.coo_file = str(QFileDialog.getOpenFileName(self, 'Open file','.')[0] )
-         ok=True
-       except: ok=False
-       if ok: self.load_coo()
+       if self.coo_l.currentIndex()==0:
+          ok=False
+          try: 
+            self.coo_file = str(QFileDialog.getOpenFileName(self, 'Open file','.')[0] )
+            ok=True
+          except: ok=False
+          if ok: self.load_coo()
+       else: 
+          self.coo_file=self.coo_l.currentText()    
+          self.load_coo()
        
    def load_coo(self):       
        plik=open(self.coo_file,'r')
+       self.setWindowTitle(self.fname+"   "+self.coo_file.split("/")[-1])
        
        
        self.ext_x=[]
@@ -365,7 +385,7 @@ class PyMage(QWidget):
        try: 
          cfg_f=open(cfg_fname)
          for l in cfg_f: cfg_file.append(l)
-       except: print("no pymage.cfg file")
+       except: print("no FitsView.cfg file")
        
 
        tmp="geometry"                                   
@@ -661,7 +681,7 @@ class HelpWindow(QDialog):
       except: 
            f=open(plik,"w+")
            txt=""
-           txt=txt+"<b>This is help for Pymage </b><br>"+"\n"
+           txt=txt+"<b>This is help for FitsView </b><br>"+"\n"
            txt=txt+"<i>7.05.2020 Marek Gorski</i><br>"+"\n"
            txt=txt+"<h4>Initialization</h4>"+"\n"
            txt=txt+"connect push help button with function: help_window=HelpWindow(\"file.hlp\")"+"\n"
@@ -811,7 +831,7 @@ class Settings(QWidget):   # DEFINCE CONFIG
        
    def save_cfg(self):        # CONFIG SAVE
        
-       cfg_fname=self.parent.pwd+"pymage.cfg"     
+       cfg_fname=self.parent.pwd+"FitsView.cfg"     
        cfg_file=open(cfg_fname,"w+")
        chx1,chx2,chx3=False,False,False
        txt=""

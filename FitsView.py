@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 #----------------
 # 20.04.2020 - start pracy nad programem
@@ -7,7 +7,7 @@
 #----------------
 
 import sys, os
-from pymage_gui import *
+from FitsView_gui import *
 from PyQt5.QtWidgets import QApplication
 
 app = QApplication(sys.argv)
@@ -17,7 +17,7 @@ pwd = __file__    # app location
 
 cfg=[]
 #cfg=["flip_X=True","flip_Y=True","saturation=1000.0","cmap=spectral"]
-main = PyMage(cfg)
+main = FitsView(cfg)
 
 
 fits=False
