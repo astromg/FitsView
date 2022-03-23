@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 #----------------
-# 7.12.2020
+# 23.03.2022
 # Marek Gorski
 #----------------
 
@@ -34,7 +34,7 @@ class HeaderTabLocal(QWidget):
 
 
        self.cl =  QPushButton('Close', self)
-       self.cl.clicked. ct(self.close_window)
+       self.cl.clicked.connect(self.close_window)
        
        self.heder_e= QTextEdit()
        self.heder_e.setReadOnly(True)

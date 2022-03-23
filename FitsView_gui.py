@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 #----------------
-# 7.12.2020
+# 23.03.2022
 # Marek Gorski
 #----------------
 
@@ -332,10 +332,6 @@ class FitsView(QWidget):
        
 
    def load_fits(self):
-       #print(QtGui.QDesktopWidget().screenGeometry().width())
-       #print(QtGui.QDesktopWidget().screenGeometry().height())
-       #print(self.frameGeometry().width())
-       #print(self.frameGeometry().height())  
        self.fname = str( QFileDialog.getOpenFileName(self, 'Open file','.')[0] )
        self.newFits()
 
