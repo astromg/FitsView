@@ -83,12 +83,13 @@ class FitsView(QWidget):
           self.updateCooList()
 
    def updateCooList(self):
-       opcje = [f for f in os.listdir(self.pwd) if self.fname.replace(".fits","") in f]
+       opcje = [f for f in os.listdir(self.pwd) if self.fname.replace(".fits","").split("/")[-1] in f]
        opcje=["other file"]+opcje
-       opcje.remove(self.fname)
+       if self.fname.split("/")[-1] in opcje: opcje.remove(self.fname.split("/")[-1])
        self.coo_l.clear()
        self.coo_l.addItems(opcje)
-          #self.coo_l.setCurrentIndex(-1)
+
+
 
 
    def open_confWindow(self):
