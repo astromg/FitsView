@@ -67,6 +67,8 @@ class Image(QWidget):
        self.auto_p.clicked.connect(self.clim_auto)
        self.max_s.valueChanged.connect(self.zmiana_vmax)
        self.min_s.valueChanged.connect(self.zmiana_vmin)
+       self.max_e.textChanged.connect(self.change_clim)
+       self.min_e.textChanged.connect(self.change_clim)
        self.fitI_p.clicked.connect(self.fit_image)
        self.shopt_p.clicked.connect(self.show_optiones)
        self.showM_c.stateChanged.connect(self.update)
@@ -240,9 +242,23 @@ class Image(QWidget):
        self.canvas_viewfinder.draw()   
    
 
+   def change_clim(self):
+
+       a=self.min_e.text()
+       b=self.max_e.text()
+       try:
+          float(a)
+          float(b)
+          ok=True
+       except: ok=False
+       if a<b and ok:
+          self.min_s.setRange(int(float(a)),int(float(b)))
+          self.max_s.setRange(int(float(a)),int(float(b)))
+
    def clim_auto(self): 
        c0 = numpy.median(self.dane,axis=None)
        c_sigma=numpy.std(self.dane,axis=None)
+       if c_sigma==numpy.inf: c_sigma=5.
        self.min_e.setText("%i"%(c0-5*c_sigma))
        self.max_e.setText("%i"%(c0+5*c_sigma))
        a=self.min_e.text()
@@ -839,12 +855,13 @@ class Image(QWidget):
        self.fitI_p =  QPushButton('Fit Image')
        
        self.max_e= QLineEdit()
-       self.max_e.setReadOnly(True)
+       #self.max_e.setReadOnly(True)
        self.min_e= QLineEdit()
-       self.min_e.setReadOnly(True)
+       #self.min_e.setReadOnly(True)
 
        c0 = numpy.median(self.dane,axis=None)
        c_sigma=numpy.std(self.dane,axis=None)
+       if c_sigma==numpy.inf: c_sigma=5.
        self.min_e.setText("%i"%(c0-5*c_sigma))
        self.max_e.setText("%i"%(c0+5*c_sigma))
        a=self.min_e.text()
