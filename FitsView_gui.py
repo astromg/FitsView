@@ -29,8 +29,9 @@ warnings.simplefilter('ignore', category=AstropyWarning)
 
 class FitsView(QWidget):
    def __init__(self,args,parent=None): 
-       QWidget.__init__(self)  
-      
+       QWidget.__init__(self) 
+
+
        txt=__file__
        if ".pyc" in txt: self.pwd=txt.strip("FitsView_gui.pyc")
        else:  self.pwd=txt.strip("FitsView_gui.py")     
@@ -95,9 +96,11 @@ class FitsView(QWidget):
        if self.fname.split("/")[-1] in opcje: opcje.remove(self.fname.split("/")[-1])
        self.coo_l.clear()
        self.coo_l.addItems(opcje)
+       self.coo_p.setStyleSheet("")
 
-
-
+   def coo_index_changed(self):
+       self.coo_p.setStyleSheet("color: rgb(255,140,0);")
+     
 
    def open_confWindow(self):
        self.cfg_window=Settings(self)    
@@ -136,8 +139,7 @@ class FitsView(QWidget):
        self.coo_p = QPushButton("Load COO")
        self.coo_p.clicked.connect(self.get_coo)
        self.coo_l=QComboBox()
-
-
+       self.coo_l.currentIndexChanged.connect(self.coo_index_changed)
 
        self.config_p = QPushButton("Configuration")
        self.config_p.clicked.connect(self.open_confWindow)
@@ -182,6 +184,7 @@ class FitsView(QWidget):
           self.coo_file=self.coo_l.currentText()    
           self.load_coo()
        
+
    def load_coo(self):       
        plik=open(self.coo_file,'r')
        self.setWindowTitle(self.fname+"   "+self.coo_file.split("/")[-1])
@@ -225,7 +228,10 @@ class FitsView(QWidget):
                  self.ext_y.append(float(line.split()[int(self.cfg_yCol)]))
                  self.ext_l.append(line)                 
         
+       self.coo_p.setStyleSheet("") 
+       self.coo_p.repaint()      # trzeba to tu bo na mac ox czasem sie nie updateje
        for x in self.tab: x.update()  
+
 
    def updateHInfo(self):
      
