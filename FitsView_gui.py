@@ -25,6 +25,8 @@ from FitsView_image import *
 
 warnings.simplefilter('ignore', category=AstropyWarning)
 
+#print(matplotlib.__version__)
+
 class FitsView(QWidget):
    def __init__(self,args,parent=None): 
        QWidget.__init__(self)  
