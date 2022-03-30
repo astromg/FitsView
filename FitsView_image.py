@@ -1,11 +1,10 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 #----------------
 # 23.03.2022
 # Marek Gorski
 #----------------
 
-import time
 
 import matplotlib, numpy
 import matplotlib.patches as patches
@@ -188,21 +187,19 @@ class Image(QWidget):
        self.ext_x=self.parent.ext_x
        self.ext_y=self.parent.ext_y
        
-       t1=time.time()
        
        if self.showM_c.checkState():
           mksize=int(self.mksize_s.value()/10.)+1 
           if self.ext_x:
              if self.parent.cfg_rot90: 
-                self.axes.plot(self.ext_y,float(len(dane))-numpy.array(self.ext_x),str(self.parent.cfg_extMarker).strip(),markersize=mksize)
-             else: self.axes.plot(self.ext_x,self.ext_y,str(self.parent.cfg_extMarker).strip(),markersize=mksize)
+                self.axes.plot(self.ext_y,float(len(dane))-numpy.array(self.ext_x),str(self.parent.cfg_extMarker).strip(),markersize=mksize,mfc='none')
+             else: self.axes.plot(self.ext_x,self.ext_y,str(self.parent.cfg_extMarker).strip(),markersize=mksize,mfc='none')
 
           mksize=mksize+2 
           if len(self.int_x)>0:
              if self.parent.cfg_rot90: 
-                self.axes.plot(self.int_y,float(len(dane))-numpy.array(self.int_x),str(self.parent.cfg_intMarker).strip(),markersize=mksize,alpha=0.5)
-             else: self.axes.plot(self.int_x,self.int_y,str(self.parent.cfg_intMarker).strip(),markersize=mksize,alpha=0.5)
-
+                self.axes.plot(self.int_y,float(len(dane))-numpy.array(self.int_x),str(self.parent.cfg_intMarker).strip(),markersize=mksize,alpha=0.5,mfc='none')
+             else: self.axes.plot(self.int_x,self.int_y,str(self.parent.cfg_intMarker).strip(),markersize=mksize,alpha=0.5,mfc='none')
        self.canvas.draw()
 
        mymap = cm.get_cmap(self.parent.cfg_cmap.strip())
@@ -426,12 +423,14 @@ class Image(QWidget):
  
    def show_header(self): 
        self.hdrl_window=HeaderTabLocal(self,self.hdr)  
+       self.parent.active_windows.append(self.hdrl_window)
 
        
        
    def keypressed(self,event):
        if not self.text_window: 
           self.text_window=TextWindow(self)
+          self.parent.active_windows.append(self.text_window)
 
        x=event.xdata
        y=event.ydata
@@ -444,7 +443,7 @@ class Image(QWidget):
        if self.parent.special:
           self.parent.com.xPressed.emit(event.key,xr,yr)
 
-       
+
        if "m" in event.key: 
           self.int_x.append(xr)
           self.int_y.append(yr)
@@ -455,6 +454,7 @@ class Image(QWidget):
           self.text_window.txt=txt2
           self.text_window.update()
           print(txt)
+
           
        if "s" in event.key: 
           self.int_x.append(xr)
@@ -482,9 +482,7 @@ class Image(QWidget):
           self.text_window.txt=txt
           self.text_window.update()
           print(txt)
-          
-          
-          
+             
           
           
        if "d" in event.key and not self.parent.special:
@@ -619,7 +617,8 @@ class Image(QWidget):
 
        if "l" in event.key:
           if not self.c_window: 
-             self.c_window=PlotWindow(self)    
+             self.c_window=PlotWindow(self) 
+             self.parent.active_windows.append(self.c_window)   
           self.c_window.show()
           self.c_window.raise_()  
           #try: self.axes.lines[-1].remove()
@@ -651,7 +650,8 @@ class Image(QWidget):
 
        if "c" in event.key:
           if not self.c_window: 
-             self.c_window=PlotWindow(self)    
+             self.c_window=PlotWindow(self)   
+             self.parent.active_windows.append(self.c_window)  
           self.c_window.show()
           self.c_window.raise_()  
           #try: self.axes.lines[-1].remove()
@@ -682,7 +682,8 @@ class Image(QWidget):
        if "e" in event.key:
          
           if not self.e_window: 
-             self.e_window=PlotWindow(self)         
+             self.e_window=PlotWindow(self) 
+             self.parent.active_windows.append(self.e_window)        
 
           self.e_window.show()
           self.e_window.raise_()  
@@ -725,7 +726,8 @@ class Image(QWidget):
        if "r" in event.key:
          
           if not self.r_window: 
-             self.r_window=PlotWindow(self)         
+             self.r_window=PlotWindow(self) 
+             self.parent.active_windows.append(self.r_window)        
 
           self.r_window.show()
           self.r_window.raise_()  

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 #----------------
 # 23.03.2022
@@ -36,6 +36,7 @@ class FitsView(QWidget):
        
        self.args=args
        
+       self.active_windows=[]
        self.initiate()
        self.mkUI()
        self.conf()
@@ -97,7 +98,8 @@ class FitsView(QWidget):
 
 
    def open_confWindow(self):
-       self.cfg_window=Settings(self)     
+       self.cfg_window=Settings(self)    
+       self.active_windows.append(self.cfg_window) 
        try:
           i = self.TabWindow.currentIndex()
           self.cfg_active_tab=i
@@ -112,7 +114,9 @@ class FitsView(QWidget):
        self.cfg_window.update()
        
 
-
+   def zamknij(self):
+       for okno in self.active_windows: okno.close()
+       self.close()
 
    def mkUI(self):
        
@@ -122,7 +126,7 @@ class FitsView(QWidget):
        self.load_p = QPushButton("Load FITS")
        self.load_p.clicked.connect(self.load_fits)
        self.close_p = QPushButton("Close")
-       self.close_p.clicked.connect(self.close)
+       self.close_p.clicked.connect(self.zamknij)
 
        self.hinfo_e=QTextEdit()
        self.hinfo_e.setReadOnly(True)
@@ -138,14 +142,12 @@ class FitsView(QWidget):
        
        self.help_p = QPushButton("HELP")
        self.help_p.clicked.connect(self.open_help)
-       
-       
+              
        grid = QGridLayout()  
        
        grid.addWidget(self.hinfo_e,0,0,3,4) 
 
        grid.addWidget(self.TabWindow,3,0,4,4)
-
 
        grid.addWidget(self.load_p,8,0)
        grid.addWidget(self.coo_p,8,1)
@@ -153,9 +155,7 @@ class FitsView(QWidget):
 
        grid.addWidget(self.help_p,9,0)       
        grid.addWidget(self.config_p,9,1)
-       
-
-       
+         
        grid.addWidget(self.close_p,9,3)
        grid.setSpacing(10)
        self.setLayout(grid)
@@ -165,6 +165,7 @@ class FitsView(QWidget):
    def open_help(self):
        tmp=self.pwd+"FitsView.hlp"
        help_window = HelpWindow(self,tmp)
+       self.active_windows.append(help_window)
 
 
    def get_coo(self):
@@ -182,8 +183,7 @@ class FitsView(QWidget):
    def load_coo(self):       
        plik=open(self.coo_file,'r')
        self.setWindowTitle(self.fname+"   "+self.coo_file.split("/")[-1])
-       
-       
+              
        self.ext_x=[]
        self.ext_y=[]
        self.ext_l=[]
@@ -338,7 +338,6 @@ class FitsView(QWidget):
 
    def updateUI(self):
 
-       
        self.updateHInfo()
        n=0
        i=0
@@ -706,7 +705,7 @@ class HelpWindow(QDialog):
       self.pole.setText(self.text)
       self.show()
       #self.resize(600,500)
-      self.exec_()
+      self.show()
       
 
 #==================================================================================
