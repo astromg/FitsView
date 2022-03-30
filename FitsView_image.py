@@ -17,14 +17,13 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 
+
 from scipy.optimize import curve_fit
 
 from FitsView_widgets import *
 
 from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QLabel,QCheckBox, QTextEdit, QLineEdit, QDialog, QTabWidget, QPushButton, QFileDialog, QGridLayout, QHBoxLayout, QVBoxLayout, QInputDialog,QComboBox, QSlider
 from PyQt5 import QtCore, QtGui
-
-  
  
         
 class Image(QWidget):
@@ -168,7 +167,10 @@ class Image(QWidget):
        self.axes.set_xticks([])
        self.axes.set_yticks([])       
       
-       mymap = cm.get_cmap(self.parent.cfg_cmap.strip()).copy()
+       if ("3.3.0">matplotlib.__version__):
+          mymap = cm.get_cmap(self.parent.cfg_cmap.strip())
+       else: mymap = cm.get_cmap(self.parent.cfg_cmap.strip()).copy()
+       
        dane2=dane.copy()
        
        if self.parent.cfg_showsat:
@@ -227,7 +229,9 @@ class Image(QWidget):
        vmin=self.min_s.value()
        vmax=self.max_s.value()     
        
-       mymap = cm.get_cmap(self.parent.cfg_cmap.strip()).copy()
+       if ("3.3.0">matplotlib.__version__):
+          mymap = cm.get_cmap(self.parent.cfg_cmap.strip())
+       else:  mymap = cm.get_cmap(self.parent.cfg_cmap.strip()).copy()
        dane2=dane.copy()      
 
        if self.parent.cfg_showsat:
