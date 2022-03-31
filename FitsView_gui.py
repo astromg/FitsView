@@ -229,7 +229,7 @@ class FitsView(QWidget):
                  self.ext_l.append(line)                 
         
        self.coo_p.setStyleSheet("") 
-       self.coo_p.repaint()      # trzeba to tu bo na mac ox czasem sie nie updateje
+       self.coo_p.repaint()      # trzeba to tu bo na mac os czasem sie nie updatuje
        for x in self.tab: x.update()  
 
 
