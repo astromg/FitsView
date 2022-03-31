@@ -22,7 +22,7 @@ from scipy.optimize import curve_fit
 
 from FitsView_widgets import *
 
-from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QLabel,QCheckBox, QTextEdit, QLineEdit, QDialog, QTabWidget, QPushButton, QFileDialog, QGridLayout, QHBoxLayout, QVBoxLayout, QInputDialog,QComboBox, QSlider
+from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QLabel,QCheckBox, QTextEdit, QMessageBox, QLineEdit, QDialog, QTabWidget, QPushButton, QFileDialog, QGridLayout, QHBoxLayout, QVBoxLayout, QInputDialog,QComboBox, QSlider
 from PyQt5 import QtCore, QtGui
  
         
@@ -194,16 +194,28 @@ class Image(QWidget):
        
        if self.showM_c.checkState():
           mksize=int(self.mksize_s.value()/10.)+1 
-          if self.ext_x:
-             if self.parent.cfg_rot90: 
-                self.axes.plot(self.ext_y,float(len(dane))-numpy.array(self.ext_x),str(self.parent.cfg_extMarker).strip(),markersize=mksize,mfc='none')
-             else: self.axes.plot(self.ext_x,self.ext_y,str(self.parent.cfg_extMarker).strip(),markersize=mksize,mfc='none')
+          if len(self.ext_x)>0:
+             try:
+                if self.parent.cfg_rot90: 
+                   self.axes.plot(self.ext_y,float(len(dane))-numpy.array(self.ext_x),str(self.parent.cfg_extMarker).strip(),markersize=mksize,mfc='none')
+                else: self.axes.plot(self.ext_x,self.ext_y,str(self.parent.cfg_extMarker).strip(),markersize=mksize,mfc='none')
+             except ValueError: 
+                self.msg = QMessageBox()
+                self.msg.setText("'"+self.parent.cfg_extMarker.strip()+"'"+ " is not a proper marker style\nCheck configuration!")   
+                self.msg.exec_()
+
 
           mksize=mksize+2 
           if len(self.int_x)>0:
-             if self.parent.cfg_rot90: 
-                self.axes.plot(self.int_y,float(len(dane))-numpy.array(self.int_x),str(self.parent.cfg_intMarker).strip(),markersize=mksize,alpha=0.5,mfc='none')
-             else: self.axes.plot(self.int_x,self.int_y,str(self.parent.cfg_intMarker).strip(),markersize=mksize,alpha=0.5,mfc='none')
+             try:
+                if self.parent.cfg_rot90: 
+                   self.axes.plot(self.int_y,float(len(dane))-numpy.array(self.int_x),str(self.parent.cfg_intMarker).strip(),markersize=mksize,alpha=0.5,mfc='none')
+                else: self.axes.plot(self.int_x,self.int_y,str(self.parent.cfg_intMarker).strip(),markersize=mksize,alpha=0.5,mfc='none')
+             except ValueError: 
+                self.msg = QMessageBox()
+                self.msg.setText("'"+self.parent.cfg_intMarker.strip()+"'"+ " is not a proper marker style\nCheck configuration!")   
+                self.msg.exec_()       
+
        self.canvas.draw()
 
        mymap = cm.get_cmap(self.parent.cfg_cmap.strip())
@@ -839,7 +851,7 @@ class Image(QWidget):
 
        self.mksize_l=QLabel("Marker Size:")
        self.mksize_s= QSlider(QtCore.Qt.Horizontal)
-       self.mksize_s.setRange(0,100)
+       self.mksize_s.setRange(0,200)
        #self.mksize_s.setTickInterval(1)
        self.mksize_s.setValue(25)
        

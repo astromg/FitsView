@@ -58,9 +58,9 @@ class FitsView(QWidget):
        
        self.coo_file=False
        
-       self.ext_x=False
-       self.ext_y=False
-       self.ext_l=False      
+       self.ext_x=[]
+       self.ext_y=[]
+       self.ext_l=[]      
        self.special=False
 
        
@@ -75,9 +75,9 @@ class FitsView(QWidget):
           
           self.coo_file=False
           
-          self.ext_x=False
-          self.ext_y=False
-          self.ext_l=False            
+          self.ext_x=[]
+          self.ext_y=[]
+          self.ext_l=[]            
           
 
           self.getFits()
@@ -201,8 +201,8 @@ class FitsView(QWidget):
              if i>2:
                 if przelacznik == 0:
                    txt=line
-                   self.ext_x.append(float(line.split()[1]))
-                   self.ext_y.append(float(line.split()[2]))
+                   self.ext_x.append(float(line.split()[1])-1.)
+                   self.ext_y.append(float(line.split()[2])-1.)
                    przelacznik=1
                 elif przelacznik == 1:
                    txt=txt+line
@@ -216,18 +216,23 @@ class FitsView(QWidget):
        elif ".raw" in self.coo_file or ".tfr" in self.coo_file or ".out" in self.coo_file or ".coo" in self.coo_file or ".als" in self.coo_file or ".lst" in self.coo_file or ".rsl" in self.coo_file: 
           for line in plik:
              if i>2 and len(line.split())>1: 
-                self.ext_x.append(float(line.split()[1]))
-                self.ext_y.append(float(line.split()[2]))
+                self.ext_x.append(float(line.split()[1])-1.)
+                self.ext_y.append(float(line.split()[2])-1.)
                 self.ext_l.append(line)
              i=i+1
              
        else:
-          for line in plik:
-              if "#" not in line and len(line.strip())>0: 
-                 self.ext_x.append(float(line.split()[int(self.cfg_xCol)]))
-                 self.ext_y.append(float(line.split()[int(self.cfg_yCol)]))
-                 self.ext_l.append(line)                 
-        
+          try: 
+             for line in plik:
+                 if "#" not in line and len(line.strip())>0: 
+                    self.ext_x.append(float(line.split()[int(self.cfg_xCol)]))
+                    self.ext_y.append(float(line.split()[int(self.cfg_yCol)]))
+                    self.ext_l.append(line)                 
+          except IndexError: 
+                 self.ext_x,self.ext_y,self.ext_l=[],[],[]
+                 self.msg = QMessageBox()
+                 self.msg.setText("Wrong column definition in COO file.\nCheck configuration!")   
+                 self.msg.exec_()          
        self.coo_p.setStyleSheet("") 
        self.coo_p.repaint()      # trzeba to tu bo na mac os czasem sie nie updatuje
        for x in self.tab: x.update()  
@@ -343,6 +348,11 @@ class FitsView(QWidget):
        self.fname = str( QFileDialog.getOpenFileName(self, 'Open file','.')[0] )
        self.newFits()
 
+
+   def errmssg(self,txt):
+       self.msg = QMessageBox()
+       self.msg.setText(txt)   
+       self.msg.exec_()         
 
    def updateUI(self):
 
@@ -567,6 +577,10 @@ class FitsView(QWidget):
        for x in self.args: 
            if tmp in x: 
               wartosc=x.split("=")[1] 
+       try: int(wartosc)+1
+       except: 
+            self.errmssg("x_Col has wrong value!\n Set to '0' ") 
+            wartosc=0      
        self.cfg_xCol=wartosc                          # TUTAJ
 
        tmp="y_Col"                                     # TUTAJ
@@ -577,8 +591,13 @@ class FitsView(QWidget):
        for x in self.args: 
            if tmp in x: 
               wartosc=x.split("=")[1] 
+       try: int(wartosc)+1
+       except: 
+            self.errmssg("y_Col has wrong value!\n Set to '0' ") 
+            wartosc=0                    
        self.cfg_yCol=wartosc                          # TUTAJ   
-       
+
+
        tmp="ext_Marker"                                     # TUTAJ
        wartosc=".g"                                         # TUTAJ
        for l in cfg_file: 
@@ -587,7 +606,8 @@ class FitsView(QWidget):
        for x in self.args: 
            if tmp in x: 
               wartosc=x.split("=")[1]     
-       self.cfg_extMarker=wartosc                          # TUTAJ       
+       self.cfg_extMarker=wartosc                          # TUTAJ   
+
 
        tmp="int_Marker"                                     # TUTAJ
        wartosc="xb"                                         # TUTAJ
@@ -726,7 +746,7 @@ class Settings(QWidget):   # DEFINCE CONFIG
        QWidget.__init__(self)
        self.parent=parent
        
-       print(self.parent.cfg_save_chx)
+       #print(self.parent.cfg_save_chx)
        self.parent.cfg_save_chx=eval(str(self.parent.cfg_save_chx))
        self.geometry_c=QCheckBox("Save App window settings")   
        if self.parent.cfg_save_chx[0]: self.geometry_c.setChecked(True)
