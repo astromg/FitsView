@@ -1,19 +1,24 @@
-<b><font color="blue">Pymage v. 0.99</font> help</b><br>
-<i>7.12.2020 Marek Gorski</i><br>
+<b><font color="blue">FitsView 1.0</font> help</b><br>
+<i>31.03.2022 Marek Gorski</i><br>
 <br>
-./pymage.py plik.fits <br>
+./FitsView.py plik.fits <br>
 <b>or</b> <br>
-./pymage.py plik.fits 400 500 <i># mark point</i><br>
-./pymage.py plik.fits plik.out <i># mark all point from plik.out</i> <br>
+./FitsView.py plik.fits 400 500 <i># mark point</i><br>
+./FitsView.py plik.fits plik.out <i># mark all point from plik.out</i> <br>
 
 <ol>
 
 <h4>Basic functions and layout of the program.</h4>
-Fits file is displayed as the <font color="blue">image</font> with the possibility to adjast contrast level with sliders on the left. 
-On the right side the upper window shows <font color="blue">vievfinder</font> window with <font color="blue">aperture</font> marked as the green circle. 
-Below is the <font color="blue">thumbnail</font> of the main image. You can <font color="blue">zoom</font> with the slider below this window. You can navigate by left-clicking on the main image, 
+Fits file is displayed as the <font color="blue">image</font>.
+On the right side the upper window shows <font color="blue">vievfinder</font> 
+window with <font color="blue">aperture</font> marked as the green circle. 
+Below is the <font color="blue">thumbnail</font> of the main image. 
+You can <font color="blue">zoom</font> with the slider below this window. 
+You can navigate by left-clicking on the main image, 
 or by left-clicking on the thumbnail. 
 <br>  
+The <font color="green">Show optiones</font> allows to
+to adjast contrast level with sliders on the left. The slider limits can be manualy edited and changed. 
 You can <font color="green">flip</font> the image in X and Y axis, and <font color="green">rotate</font> the image by 90 deg. Those operations <b>do not change</b> the working coordinates of the image. 
 <br>
 Other options are rather obvious. 
@@ -36,15 +41,16 @@ Result will be displayed in a <b>Querry Window</b>, or other specific window. Nu
 <li><b>q</b> : querry - get total counts in the vievfinder aperture. If background measuremtn was performed before, background will be subtracted. If zero-point was set-up, magnitude will be calculated with respect to the zero-point.  </li>
 <li><b>c</b> : column - count profile in a specific column is plotted. If used with zoomed image, only visible part of the column is plotted.</li>
 <li><b>l</b> : line - count profile in a specific line is plotted. If used with zoomed image, only visible part of the line is plotted.</li>
-<li><b>e</b> : eeee - izophots of part of the image are plotted.</li>
+<li><b>e</b> : elipse - izophots of part of the image are plotted.</li>
 <li><b>r</b> : radial profile of counts is plotted. The centroid is calculated and Gauss function is fitted with the resulting FWHM.</li>
-                 
+<li><b>x</b> : xternal - magic option for external functions.</li>                 
+
 </ul>
 
 <h4>Configuration</h4>
 Number of setting can be set up, and will be used with the next runn of the script. To <b>save those setting</b>, in the Config 
 window <b>activate checkbox</b> specific value. 
-This value is written and reed from the config file (<b>pymage.cfg</b>). By removing particular line from this file, the default value is adopted. Any
+This value is written and reed from the config file (<b>FitsView.cfg</b>). By removing particular line from this file, the default value is adopted. Any
 of the configuration values can be passed to the program with the <font color="green">Widget approach</font>, as the cfg list passed as the argument of the Widget. 
 
 <h4>Widget</h4>
@@ -60,17 +66,22 @@ Example: <br><br>
 
 
 <h4>Libraries:</h4>
-Python2.7<br>
+Python3<br>
 Astropy<br>
 NumPy<br>
 SciPy<br>
 matplotlib<br>
-PyQt4<br>
+PyQt5<br>
 
 <h4>Issues & ToDo:</h4>
 <ul>
-<li> x function <br>
+<li> On Mac OS Maveric in PyQt5 there is a bug with CSlider. 
+     If more than one (horizontal or vertical) are present, 
+     the display is messing first with the second. <br>
+<li> There can be some problems with PyQt 5.15. Use later versions.
+
 </ul>
+
 
 
 </ol>
