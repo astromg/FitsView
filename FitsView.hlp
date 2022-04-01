@@ -56,13 +56,29 @@ of the configuration values can be passed to the program with the <font color="g
 <h4>Widget</h4>
 You can run this script as the part of other python scripts as the Widget.<br>
 Example: <br><br> 
-<i> from pymage_gui import * </i> # load Pymage class to Your script <br> <br> 
-<i> cfg=["x_Col=1","y_Col=2"] </i> # set up desired configuration. <br><br> 
-<i> PM_window = PyMage(cfg) </i> # run the Pymage Widget class <br><br> 
-<i> PM_window.fname="plik.fits"  </i> # define FITS file name <br><br> 
-<i> PM_window.newFits() </i> # execute new fits <br><br> 
-<i> PM_window.coo_file="plik.coo" </i> # define file with object coordinates <br><br> 
-<i> PM_window.load_coo() </i> # execute new coo file <br>
+<i> cp FitsView* . </i> #copy FitsView files to working directory <br> 
+<i> from FitsView_gui import * </i> # load Pymage class to Your script <br>  
+<i> cfg=["x_Col=1","y_Col=2"] </i> # set up desired configuration. <br>
+<i> FV_window = FitsView(cfg) </i> # run the Pymage Widget class <br>
+<i> FV_window.fname="plik.fits"  </i> # define FITS file name <br> 
+<i> FV_window.newFits() </i> # execute new fits <br>
+<i> FV_window.show()</i> <br>
+<b>To show points on fits</b><br>
+<i> FV_window.coo_file="plik.coo" </i> # define file with object coordinates <br>
+<i> FV_window.load_coo() </i> # execute new coo file <br>
+<i> FV_window.show() </i> <br>
+<b>or</b><br>
+<i> FV_window.ext_x=[10,10,300] </i> <br>
+<i> FV_window.ext_y=[20,40,60] </i> <br>
+<i> FV_window.ext_l=["raz","dwa","trzy"] </i>  <br>
+<i> FV_window.update() </i> <br>
+<b>Special x function start</b>   <br>
+<i> FV_window.special=True  </i> <br>
+<i> FV_window.com.xPressed.connect(self.stopFunction) </i> #emitts: "key", "x", "y"  <br>
+<b>Special x function stop</b>   <br>
+<i> FV_window.special=False  </i> <br>
+<i> FV_window.com.xPressed.disconnect(self.stopFunction) </i>  <br>
+
 
 
 <h4>Libraries:</h4>
