@@ -48,10 +48,16 @@ Result will be displayed in a <b>Querry Window</b>, or other specific window. Nu
 </ul>
 
 <h4>Configuration</h4>
-Number of setting can be set up, and will be used with the next runn of the script. To <b>save those setting</b>, in the Config 
-window <b>activate checkbox</b> specific value. 
-This value is written and reed from the config file (<b>FitsView.cfg</b>). By removing particular line from this file, the default value is adopted. Any
-of the configuration values can be passed to the program with the <font color="green">Widget approach</font>, as the cfg list passed as the argument of the Widget. 
+
+Number of setting can be set up, and will be used with the next runn of the script. 
+To save those setting, in the Config window edit specific value and press <b>Save CFG</b>.
+ To update changed values on the current display press <b>Update CFG</b>. 
+ You can save <i>main window geometry</i>, <i>image display settings</i> and <i>zoom setting</i> 
+ by checking corresponding <b>checkbox</b>. 
+Configuration is saved and reed from the config file (<b>FitsView.cfg</b>). 
+By removing particular line from this file, the default value is adopted. 
+Any of the configuration values can be passed to the program with the <b>Widget approach</b>, 
+as the cfg list can be passed as the argument of the Widget.
 
 <h4>Widget</h4>
 You can run this script as the part of other python scripts as the Widget.<br>

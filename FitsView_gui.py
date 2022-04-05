@@ -731,7 +731,7 @@ class HelpWindow(QDialog):
       self.pole.setReadOnly(1)
 #      self.pole.setLineWrapMode(0)
       self.pole.setText(self.text)
-      self.show()
+      #self.pole.setMarkdown(self.text)
       #self.resize(600,500)
       self.show()
       
