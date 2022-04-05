@@ -1,17 +1,24 @@
 # FitsView
-Python Fits Viewer
+Python Fits Viewer - **FitsView 1.0**
 
-**FitsView 1.0** 
+**31.03.2022**  
+**Marek Gorski** 
 
-_31.03.2022_
-_Marek Gorski_  
+### Reguirements:
+*python3, PyQt5, astropy, numpy, matplotlib, scipy*  
 
-./FitsView.py plik.fits  
+### Run:
+
+```console
+./FitsView.py plik.fits 
+```
 **or**  
-./FitsView.py plik.fits 400 500 _# mark point_  
-./FitsView.py plik.fits plik.out _# mark all point from plik.out_  
 
-#### Basic functions and layout of the program.
+```./FitsView.py plik.fits 400 500```  #  mark point  
+```./FitsView.py plik.fits plik.out```  #  mark all point from plik.out  
+
+
+### Basic functions and layout of the program.
 
 Fits file is displayed as the <font color="blue">image</font>. On the right side the upper window shows <font color="blue">vievfinder</font> window with <font color="blue">aperture</font> marked as the green circle. Below is the <font color="blue">thumbnail</font> of the main image. You can <font color="blue">zoom</font> with the slider below this window. You can navigate by left-clicking on the main image, or by left-clicking on the thumbnail.  
 The <font color="green">Show optiones</font> allows to to adjast contrast level with sliders on the left. The slider limits can be manualy edited and changed. You can <font color="green">flip</font> the image in X and Y axis, and <font color="green">rotate</font> the image by 90 deg. Those operations **do not change** the working coordinates of the image.  
@@ -42,19 +49,15 @@ Number of setting can be set up, and will be used with the next runn of the scri
 
 #### Widget
 
-_from pymage_gui import *_ 
-
-_cfg=["x_Col=1","y_Col=2"]_ 
-
-_PM_window = PyMage(cfg)_ 
-
-_PM_window.fname="plik.fits"_ 
-
-_PM_window.newFits()_ 
-
-_PM_window.coo_file="plik.coo"_ 
-
-_PM_window.load_coo()_ 
+```
+from pymage_gui import *
+cfg=["x_Col=1","y_Col=2"]
+PM_window = PyMage(cfg)
+PM_window.fname="plik.fits"
+PM_window.newFits() 
+PM_window.coo_file="plik.coo"
+PM_window.load_coo()
+```
 
 #### Libraries:
 
