@@ -1,5 +1,5 @@
 # FitsView
-Python Fits Viewer - **FitsView 1.0**
+Python Fits Viewer - **FitsView**
 
 **31.03.2022**  
 **Marek Gorski** 
