@@ -91,7 +91,8 @@ class FitsView(QWidget):
           self.msg.exec_()
 
    def updateCooList(self):
-       opcje = [f for f in os.listdir(self.pwd) if self.fname.replace(".fits","").split("/")[-1] in f]
+       basename=self.fname.replace(".fits","").split("/")[-1]
+       opcje = [f for f in os.listdir(self.fname.replace(self.fname.split("/")[-1],"")) if basename in f]
        opcje=["other file"]+opcje
        if self.fname.split("/")[-1] in opcje: opcje.remove(self.fname.split("/")[-1])
        self.coo_l.clear()
