@@ -220,6 +220,20 @@ class FitsView(QWidget):
                 self.ext_y.append(float(line.split()[2])-1.)
                 self.ext_l.append(line)
              i=i+1
+
+
+       elif ".cal" in self.coo_file: 
+          for line in plik:
+             if i>2 and len(line.split())>1: 
+                if "_J" in self.fname.split("/")[-1]:
+                   self.ext_x.append(float(line.split()[2])-1.)
+                   self.ext_y.append(float(line.split()[3])-1.)
+                   self.ext_l.append(line)
+                if "_K" in self.fname.split("/")[-1]:
+                   self.ext_x.append(float(line.split()[4])-1.)
+                   self.ext_y.append(float(line.split()[5])-1.)
+                   self.ext_l.append(line)
+             i=i+1
              
        else:
           try: 
