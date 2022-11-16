@@ -469,7 +469,7 @@ class Image(QWidget):
        xr,yr=x,y
        
        if self.parent.cfg_rot90:
-          xr=len(self.dane)-y
+          xr=len(self.dane[0])-y
           yr=x
 
        if self.parent.special:
