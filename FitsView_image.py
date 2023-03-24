@@ -851,7 +851,7 @@ class Image(QWidget):
 
        self.mksize_l=QLabel("Marker Size:")
        self.mksize_s= QSlider(QtCore.Qt.Horizontal)
-       self.mksize_s.setRange(0,200)
+       self.mksize_s.setRange(int(0),int(200))
        #self.mksize_s.setTickInterval(1)
        self.mksize_s.setValue(25)
        
@@ -892,8 +892,8 @@ class Image(QWidget):
        self.auto_p =  QPushButton('Auto')
        
        self.zoom_s= QSlider(QtCore.Qt.Horizontal)
-       if len(self.dane)>len(self.dane[0]): self.zoom_s.setRange(-0.3*len(self.dane),len(self.dane)-1)
-       else: self.zoom_s.setRange(-0.3*len(self.dane[0]),len(self.dane[0]))
+       if len(self.dane)>len(self.dane[0]): self.zoom_s.setRange(int(-0.3*len(self.dane)),int(len(self.dane)-1))
+       else: self.zoom_s.setRange(int(-0.3*len(self.dane[0])),int(len(self.dane[0])))
        self.zoom_s.setValue(1)
        
        self.header_p =  QPushButton('Header')
