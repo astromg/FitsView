@@ -174,9 +174,10 @@ class Image(QWidget):
        dane2=dane.copy()
        
        if self.parent.cfg_showsat:
-          sat = float(self.parent.cfg_saturation)
-          dane2[dane>=sat]="nan"
-          mymap.set_bad("red")
+          pass
+          #sat = float(self.parent.cfg_saturation)
+          #dane2[dane>=sat]="nan"
+          #mymap.set_bad("red")
        
        self.image = self.axes.imshow(dane2,cmap=mymap,vmin=vmin, vmax=vmax,interpolation="None")
        
@@ -247,9 +248,10 @@ class Image(QWidget):
        dane2=dane.copy()      
 
        if self.parent.cfg_showsat:
-          sat = float(self.parent.cfg_saturation)
-          dane2[dane>=sat]="nan"
-          mymap.set_bad("red")       
+          pass
+          #sat = float(self.parent.cfg_saturation)
+          #dane2[dane>=sat]="nan"
+          #mymap.set_bad("red")       
      
        self.axes_viewfinder.clear()
        self.image_viewfinder = self.axes_viewfinder.imshow(dane2,cmap=mymap,vmin=vmin, vmax=vmax,interpolation="None",aspect="equal")       
