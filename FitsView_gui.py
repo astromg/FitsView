@@ -69,7 +69,7 @@ class FitsView(QWidget):
    def nextFits(self):   
           lista=[f for f in os.listdir(os.getcwd()) if ".fits" in f]
           i=lista.index(self.fname)
-          if i<len(lista): 
+          if i<len(lista)-1: 
             i=i+1
             self.fname=lista[i] 
             self.newFits()   
