@@ -66,7 +66,23 @@ class FitsView(QWidget):
        
        #print(self.hdu.info())
 
-   
+   def nextFits(self):   
+          lista=[f for f in os.listdir(os.getcwd()) if ".fits" in f]
+          i=lista.index(self.fname)
+          if i<len(lista): 
+            i=i+1
+            self.fname=lista[i] 
+            self.newFits()   
+
+
+   def prevFits(self):   
+          lista=[f for f in os.listdir(os.getcwd()) if ".fits" in f]
+          i=lista.index(self.fname)
+          if i>0: 
+            i=i-1
+            self.fname=lista[i] 
+            self.newFits()   
+
    def newFits(self):
 
        if ".fits" in self.fname:
@@ -147,21 +163,28 @@ class FitsView(QWidget):
        
        self.help_p = QPushButton("HELP")
        self.help_p.clicked.connect(self.open_help)
+
+       self.next_p = QPushButton("\u2192")
+       self.next_p.clicked.connect(self.nextFits)
+       self.prev_p = QPushButton("\u2190")
+       self.prev_p.clicked.connect(self.prevFits)              
               
        grid = QGridLayout()  
        
-       grid.addWidget(self.hinfo_e,0,0,3,4) 
+       grid.addWidget(self.hinfo_e,0,0,3,5) 
 
-       grid.addWidget(self.TabWindow,3,0,4,4)
+       grid.addWidget(self.TabWindow,3,0,4,5)
 
        grid.addWidget(self.load_p,8,0)
        grid.addWidget(self.coo_p,8,1)
        grid.addWidget(self.coo_l,8,2)
+       grid.addWidget(self.prev_p,8,3)
+       grid.addWidget(self.next_p,8,4)
 
        grid.addWidget(self.help_p,9,0)       
        grid.addWidget(self.config_p,9,1)
          
-       grid.addWidget(self.close_p,9,3)
+       grid.addWidget(self.close_p,9,3,1,2)
        grid.setSpacing(10)
        self.setLayout(grid)
        self.setGeometry(50, 50, 800, 750)
