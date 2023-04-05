@@ -173,11 +173,10 @@ class Image(QWidget):
        
        dane2=dane.copy()
        
-       if self.parent.cfg_showsat:
-          pass
-          #sat = float(self.parent.cfg_saturation)
-          #dane2[dane>=sat]="nan"
-          #mymap.set_bad("red")
+       #if self.parent.cfg_showsat:
+       #   sat = float(self.parent.cfg_saturation)
+       #   dane2[dane>=sat]="nan"
+       #   mymap.set_bad("red")
        
        self.image = self.axes.imshow(dane2,cmap=mymap,vmin=vmin, vmax=vmax,interpolation="None")
        
@@ -247,11 +246,11 @@ class Image(QWidget):
        else:  mymap = cm.get_cmap(self.parent.cfg_cmap.strip()).copy()
        dane2=dane.copy()      
 
-       if self.parent.cfg_showsat:
-          pass
-          #sat = float(self.parent.cfg_saturation)
-          #dane2[dane>=sat]="nan"
-          #mymap.set_bad("red")       
+
+       #if self.parent.cfg_showsat:
+       #   sat = float(self.parent.cfg_saturation)
+       #   dane2[dane>=sat]="nan"
+       #   mymap.set_bad("red")
      
        self.axes_viewfinder.clear()
        self.image_viewfinder = self.axes_viewfinder.imshow(dane2,cmap=mymap,vmin=vmin, vmax=vmax,interpolation="None",aspect="equal")       
@@ -283,8 +282,8 @@ class Image(QWidget):
        b=self.max_e.text()
        self.min_s.setRange(int(float(a)),int(float(b)))
        self.max_s.setRange(int(float(a)),int(float(b)))
-       self.min_s.setValue(c0-c_sigma)
-       self.max_s.setValue(c0+c_sigma)
+       self.min_s.setValue(int(c0-c_sigma))
+       self.max_s.setValue(int(c0+c_sigma))
 
    def fit_image(self):
        self.zoom_s.setValue(1)
@@ -328,7 +327,7 @@ class Image(QWidget):
 
    def update_cfg(self):
 
-       self.zoom_s.setValue(float(self.parent.cfg_zoom))
+       self.zoom_s.setValue(int(float(self.parent.cfg_zoom)))
        if self.parent.cfg_zoomX: self.x=float(self.parent.cfg_zoomX)
        if self.parent.cfg_zoomY: self.y=float(self.parent.cfg_zoomY) 
        
@@ -419,7 +418,7 @@ class Image(QWidget):
        
        if vmin>vmax: 
           vmax=vmin+0.1
-          self.max_s.setValue(vmax)
+          self.max_s.setValue(int(vmax))
         
        self.image.set_clim(vmin=vmin,vmax=vmax)
        self.image_viewfinder.set_clim(vmin=vmin,vmax=vmax)
@@ -434,7 +433,7 @@ class Image(QWidget):
        
        if vmax<vmin: 
           vmin=vmax-0.1
-          self.min_s.setValue(vmin)
+          self.min_s.setValue(int(vmin))
        
        self.image.set_clim(vmin=vmin,vmax=vmax)
        self.image_viewfinder.set_clim(vmin=vmin,vmax=vmax)
@@ -853,7 +852,7 @@ class Image(QWidget):
 
        self.mksize_l=QLabel("Marker Size:")
        self.mksize_s= QSlider(QtCore.Qt.Horizontal)
-       self.mksize_s.setRange(0,200)
+       self.mksize_s.setRange(int(0),int(200))
        #self.mksize_s.setTickInterval(1)
        self.mksize_s.setValue(25)
        
@@ -894,8 +893,8 @@ class Image(QWidget):
        self.auto_p =  QPushButton('Auto')
        
        self.zoom_s= QSlider(QtCore.Qt.Horizontal)
-       if len(self.dane)>len(self.dane[0]): self.zoom_s.setRange(-0.3*len(self.dane),len(self.dane)-1)
-       else: self.zoom_s.setRange(-0.3*len(self.dane[0]),len(self.dane[0]))
+       if len(self.dane)>len(self.dane[0]): self.zoom_s.setRange(int(-0.3*len(self.dane)),int(len(self.dane)-1))
+       else: self.zoom_s.setRange(int(-0.3*len(self.dane[0])),int(len(self.dane[0])))
        self.zoom_s.setValue(1)
        
        self.header_p =  QPushButton('Header')
