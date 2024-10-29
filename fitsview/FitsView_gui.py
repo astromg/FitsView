@@ -178,32 +178,33 @@ class FitsView(QWidget):
        self.prev_p.clicked.connect(self.prevFits)              
               
        grid = QGridLayout()  
-       
-       grid.addWidget(self.hinfo_e,0,0,3,5)
-       grid.setRowStretch(0,1)
 
+       w = 0
+       grid.addWidget(self.hinfo_e,w,0,3,5)
 
-       grid.addWidget(self.TabWindow,3,0,4,5)
-       grid.setRowStretch(3,5)
+       w = 1
+       grid.addWidget(self.TabWindow,w,0,4,5)
 
+       w = 8
+       grid.addWidget(self.load_p,w,0)
+       grid.addWidget(self.coo_p,w,1)
+       grid.addWidget(self.coo_l,w,2)
+       grid.addWidget(self.prev_p,w,3)
+       grid.addWidget(self.next_p,w,4)
 
-       grid.addWidget(self.load_p,8,0)
-       grid.addWidget(self.coo_p,8,1)
-       grid.addWidget(self.coo_l,8,2)
-       grid.addWidget(self.prev_p,8,3)
-       grid.addWidget(self.next_p,8,4)
-       grid.setRowStretch(8,0)
+       w = 9
+       grid.addWidget(self.help_p,w,0)
+       grid.addWidget(self.config_p,w,1)
+       grid.addWidget(self.close_p,w,3,1,2)
 
-
-       grid.addWidget(self.help_p,9,0)       
-       grid.addWidget(self.config_p,9,1)
-         
-       grid.addWidget(self.close_p,9,3,1,2)
-       grid.setRowStretch(9,0)
-
-       grid.setSpacing(10)
+       grid.setSpacing(5)
        self.setLayout(grid)
        self.setGeometry(50, 50, 800, 750)
+
+       for w in [0,1,2,3,4,5,6,7,8,9]:
+        grid.setRowStretch(w,0)
+       grid.setRowStretch(3, 1)
+
 
 
    def open_help(self):

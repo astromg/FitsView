@@ -990,3 +990,11 @@ class Image(QWidget):
        grid.setRowStretch(1,1)
        grid.setRowStretch(2,1)
 
+       grid.setColumnStretch(0, 0)
+       grid.setColumnStretch(1, 0)
+       grid.setColumnStretch(2, 1)
+       grid.setColumnStretch(3, 0)
+       grid.setColumnStretch(4, 0)
+       grid.setColumnStretch(5, 0)
+       grid.setColumnStretch(6, 0)
+
