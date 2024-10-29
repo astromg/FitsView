@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "fitsview"
+version = "0.1.0"
+description = "Just a Fits View app"
+authors = ["Marek Gorski <mgorski@camk.edu.pl>"]
+license = "MIT"
+readme = "README.md"
+
+
+[tool.poetry.dependencies]
+python = ">=3.9,<3.13"
+matplotlib = "^3.6.3"
+astropy = ">=5.0.4,<5.1.0"
+PyQt5 = "^5.15"
+scipy = "^1.11"
+
+[tool.poetry.scripts]
+FitsView = "fitsview.fitsview:main"
+fv = "fitsview.fitsview:main"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

@@ -89,6 +89,9 @@ FV_window.com.xPressed.disconnect(self.stopFunction)
 ```
 
 
+### Reinstall:
+pipx reinstall fitsview
+
 #### Libraries:
 
 Python3  

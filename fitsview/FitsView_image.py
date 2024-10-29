@@ -17,10 +17,9 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 
-
 from scipy.optimize import curve_fit
 
-from FitsView_widgets import *
+from fitsview import FitsView_widgets
 
 from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QLabel,QCheckBox, QTextEdit, QMessageBox, QLineEdit, QDialog, QTabWidget, QPushButton, QFileDialog, QGridLayout, QHBoxLayout, QVBoxLayout, QInputDialog,QComboBox, QSlider
 from PyQt5 import QtCore, QtGui
@@ -321,8 +320,7 @@ class Image(QWidget):
        else: self.axes_small.set_xlim(0,len(self.dane[0]))
        if self.parent.cfg_flipY: self.axes_small.set_ylim(len(self.dane),0)
        else: self.axes_small.set_ylim(0,len(self.dane))       
-       
-       
+
        self.canvas_small.draw()
 
    def update_cfg(self):
@@ -455,14 +453,14 @@ class Image(QWidget):
 
  
    def show_header(self): 
-       self.hdrl_window=HeaderTabLocal(self,self.hdr)  
+       self.hdrl_window=FitsView_widgets.HeaderTabLocal(self,self.hdr)
        self.parent.active_windows.append(self.hdrl_window)
 
        
        
    def keypressed(self,event):
        if not self.text_window: 
-          self.text_window=TextWindow(self)
+          self.text_window=FitsView_widgets.TextWindow(self)
           self.parent.active_windows.append(self.text_window)
 
        x=event.xdata
@@ -545,7 +543,7 @@ class Image(QWidget):
 
        if "b" in event.key:
           r=int(self.parent.cfg_apersize)
-          dane = self.dane[int(y)-r:int(y)+r,int(x)-r:int(x)+r]
+          dane = self.dane[int(yr)-r:int(yr)+r,int(xr)-r:int(xr)+r]
           x0=(len(dane[0])/2.)
           y0=(len(dane)/2.)        
           XX,YY = numpy.meshgrid(numpy.arange(dane.shape[1]),numpy.arange(dane.shape[0]))
@@ -568,7 +566,7 @@ class Image(QWidget):
 
        if "q" in event.key:
           r=int(self.parent.cfg_apersize)
-          dane = self.dane[int(y)-r:int(y)+r,int(x)-r:int(x)+r]
+          dane = self.dane[int(yr)-r:int(yr)+r,int(xr)-r:int(xr)+r]
           x0=(len(dane[0])/2.)
           y0=(len(dane)/2.) 
           XX,YY = numpy.meshgrid(numpy.arange(dane.shape[1]),numpy.arange(dane.shape[0]))
@@ -590,7 +588,7 @@ class Image(QWidget):
 
        if "z" in event.key:
           r=int(self.parent.cfg_apersize)
-          dane = self.dane[int(y)-r:int(y)+r,int(x)-r:int(x)+r]
+          dane = self.dane[int(yr)-r:int(yr)+r,int(xr)-r:int(xr)+r]
           x1=(len(dane[0])/2.)
           y1=(len(dane)/2.) 
           XX,YY = numpy.meshgrid(numpy.arange(dane.shape[1]),numpy.arange(dane.shape[0]))
@@ -599,10 +597,10 @@ class Image(QWidget):
            
           x0=numpy.sum(c*xx)/( numpy.sum(c) )
           y0=numpy.sum(c*yy)/( numpy.sum(c) ) 
-          x=x+(x0-x1)
-          y=y+(y0-y1)
+          xr=xr+(x0-x1)
+          yr=yr+(y0-y1)
           
-          dane = self.dane[int(y)-r:int(y)+r,int(x)-r:int(x)+r]
+          dane = self.dane[int(yr)-r:int(yr)+r,int(xr)-r:int(xr)+r]
           XX,YY = numpy.meshgrid(numpy.arange(dane.shape[1]),numpy.arange(dane.shape[0]))
           tmp = numpy.vstack((dane.ravel(),XX.ravel(),YY.ravel()))         
           c,xx,yy=tmp[0],tmp[1],tmp[2]          
@@ -650,18 +648,24 @@ class Image(QWidget):
 
        if "l" in event.key:
           if not self.c_window: 
-             self.c_window=PlotWindow(self) 
+             self.c_window=FitsView_widgets.PlotWindow(self)
              self.parent.active_windows.append(self.c_window)   
           self.c_window.show()
           self.c_window.raise_()  
           #try: self.axes.lines[-1].remove()
           #except: pass
           
-          x1,x2 = self.axes.get_xlim()
+          if self.parent.cfg_rot90:
+              x1, x2 = self.axes.get_ylim()
+          else:
+              x1, x2 = self.axes.get_xlim()
+
+          x1,x2 = min([x1,x2]),max([x1,x2])
+
           if x1<0: x1=0
-          if x2>len(self.dane[int(y),:])-1: x2=len(self.dane[int(y),:])-1
+          if x2>len(self.dane[int(yr),:])-1: x2=len(self.dane[int(yr),:])-1
           
-          yyy=self.dane[int(y),int(x1):int(x2)]
+          yyy=self.dane[int(yr),int(x1):int(x2)]
           xxx=numpy.arange(x1,x1+len(yyy),1)
           
           self.c_window.axes.clear()
@@ -683,18 +687,25 @@ class Image(QWidget):
 
        if "c" in event.key:
           if not self.c_window: 
-             self.c_window=PlotWindow(self)   
+             self.c_window=FitsView_widgets.PlotWindow(self)
              self.parent.active_windows.append(self.c_window)  
           self.c_window.show()
           self.c_window.raise_()  
           #try: self.axes.lines[-1].remove()
           #except: pass
 
-          y1,y2 = self.axes.get_ylim()
+          if self.parent.cfg_rot90:
+              y1, y2 = self.axes.get_xlim()
+          else:
+              y1, y2 = self.axes.get_ylim()
+
+          y1,y2 = min([y1,y2]),max([y1,y2])
+
+          # nie wiem czy to jest potrzebne
           if y1<0: y1=0
-          if y2>len(self.dane[:,int(x)])-1: y2=len(self.dane[:,int(x)])-1
+          if y2>len(self.dane[:,int(xr)])-1: y2=len(self.dane[:,int(xr)])-1
              
-          yyy=self.dane[int(y1):int(y2),int(x)]
+          yyy=self.dane[int(y1):int(y2),int(xr)]
           xxx=numpy.arange(y1,y1+len(yyy),1)
           
           self.c_window.axes.clear()
@@ -715,7 +726,7 @@ class Image(QWidget):
        if "e" in event.key:
          
           if not self.e_window: 
-             self.e_window=PlotWindow(self) 
+             self.e_window=FitsView_widgets.PlotWindow(self)
              self.parent.active_windows.append(self.e_window)        
 
           self.e_window.show()
@@ -724,7 +735,7 @@ class Image(QWidget):
          
           r=int((2*int(self.parent.cfg_apersize)+15)/2.) 
       
-          dane = self.dane[int(y)-r:int(y)+r,int(x)-r:int(x)+r]
+          dane = self.dane[int(yr)-r:int(yr)+r,int(xr)-r:int(xr)+r]
           x1=(len(dane[0])/2.)
           y1=(len(dane)/2.) 
 
@@ -759,7 +770,7 @@ class Image(QWidget):
        if "r" in event.key:
          
           if not self.r_window: 
-             self.r_window=PlotWindow(self) 
+             self.r_window=FitsView_widgets.PlotWindow(self)
              self.parent.active_windows.append(self.r_window)        
 
           self.r_window.show()
@@ -902,7 +913,8 @@ class Image(QWidget):
 
 
        # Main image  ---------------------------------------------------------------
-       self.fig = Figure(figsize=(5, 10.0), linewidth=-1, dpi=100,frameon=False)
+       #self.fig = Figure(figsize=(5, 10.0), linewidth=-1, dpi=100,frameon=False)
+       self.fig = Figure(linewidth=-1, dpi=100,frameon=False)
        self.canvas = FigureCanvas(self.fig) 
        self.axes = self.fig.add_axes([0, 0, 1, 1]) 
        self.axes.axis("off")

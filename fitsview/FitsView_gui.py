@@ -20,8 +20,7 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QMessageBox, QLabel,QCheckBox, QComboBox, QTextEdit, QLineEdit, QDialog, QTabWidget, QPushButton, QFileDialog, QGridLayout, QHBoxLayout, QVBoxLayout, QMessageBox
 from PyQt5 import QtCore, QtGui
 
-
-from FitsView_image import *
+from fitsview import FitsView_image
 
 warnings.simplefilter('ignore', category=AstropyWarning)
 
@@ -56,7 +55,7 @@ class FitsView(QWidget):
        self.config_file="FitsView.cfg"
        self.fname=False
        
-       self.coo_file=False
+       self.coo_file=None
        
        self.ext_x=[]
        self.ext_y=[]
@@ -66,22 +65,31 @@ class FitsView(QWidget):
        
        #print(self.hdu.info())
 
-   def nextFits(self):   
-          lista=[f for f in os.listdir(os.getcwd()) if ".fits" in f]
-          i=lista.index(self.fname)
-          if i<len(lista)-1: 
-            i=i+1
-            self.fname=lista[i] 
-            self.newFits()   
+   def nextFits(self):
+       print(f'CWD: {os.getcwd()}')
+       lista = sorted([f for f in os.listdir(os.getcwd()) if ".fits" in f])
+       if self.fname in lista:
+           i = lista.index(self.fname)
+           if i < len(lista) - 1:
+               i = i + 1
+               self.fname = lista[i]
+               self.newFits()
 
 
-   def prevFits(self):   
-          lista=[f for f in os.listdir(os.getcwd()) if ".fits" in f]
-          i=lista.index(self.fname)
-          if i>0: 
-            i=i-1
-            self.fname=lista[i] 
-            self.newFits()   
+
+
+
+
+   def prevFits(self):
+       print(f'CWD: {os.getcwd()}')
+       lista = sorted([f for f in os.listdir(os.getcwd()) if ".fits" in f])
+       if self.fname in lista:
+           i = lista.index(self.fname)
+           if i > 0:
+               i = i - 1
+               self.fname = lista[i]
+               self.newFits()
+
 
    def newFits(self):
 
@@ -89,7 +97,7 @@ class FitsView(QWidget):
          
           self.TabWindow.clear() 
           
-          self.coo_file=False
+          self.coo_file=None
           
           self.ext_x=[]
           self.ext_y=[]
@@ -171,20 +179,28 @@ class FitsView(QWidget):
               
        grid = QGridLayout()  
        
-       grid.addWidget(self.hinfo_e,0,0,3,5) 
+       grid.addWidget(self.hinfo_e,0,0,3,5)
+       grid.setRowStretch(0,1)
+
 
        grid.addWidget(self.TabWindow,3,0,4,5)
+       grid.setRowStretch(3,5)
+
 
        grid.addWidget(self.load_p,8,0)
        grid.addWidget(self.coo_p,8,1)
        grid.addWidget(self.coo_l,8,2)
        grid.addWidget(self.prev_p,8,3)
        grid.addWidget(self.next_p,8,4)
+       grid.setRowStretch(8,0)
+
 
        grid.addWidget(self.help_p,9,0)       
        grid.addWidget(self.config_p,9,1)
          
        grid.addWidget(self.close_p,9,3,1,2)
+       grid.setRowStretch(9,0)
+
        grid.setSpacing(10)
        self.setLayout(grid)
        self.setGeometry(50, 50, 800, 750)
@@ -203,78 +219,84 @@ class FitsView(QWidget):
             self.coo_file = str(QFileDialog.getOpenFileName(self, 'Open file','.')[0] )
             ok=True
           except: ok=False
-          if ok: self.load_coo()
+          if ok:
+              if self.coo_file!=None:
+                  self.load_coo()
        else: 
-          self.coo_file=self.coo_l.currentText()    
-          self.load_coo()
+          self.coo_file=self.coo_l.currentText()
+          if self.coo_file != None:
+              self.load_coo()
        
 
    def load_coo(self):       
-       plik=open(self.coo_file,'r')
-       self.setWindowTitle(self.fname+"   "+self.coo_file.split("/")[-1])
-              
-       self.ext_x=[]
-       self.ext_y=[]
-       self.ext_l=[]
+       try:
+           plik = open(self.coo_file, 'r')
+           if self.fname:
+               self.setWindowTitle(self.fname+"   "+self.coo_file.split("/")[-1])
 
-       i=0       
-       if ".ap" in self.coo_file:
-          przelacznik=2
-          txt=""
-          for line in plik:
-             if i>2:
-                if przelacznik == 0:
-                   txt=line
-                   self.ext_x.append(float(line.split()[1])-1.)
-                   self.ext_y.append(float(line.split()[2])-1.)
-                   przelacznik=1
-                elif przelacznik == 1:
-                   txt=txt+line
-                   self.ext_l.append(txt)
-                   przelacznik=2
-                elif przelacznik == 2:
-                   przelacznik=0               
-             i=i+1
+           self.ext_x=[]
+           self.ext_y=[]
+           self.ext_l=[]
 
-
-       elif ".raw" in self.coo_file or ".tfr" in self.coo_file or ".out" in self.coo_file or ".coo" in self.coo_file or ".als" in self.coo_file or ".lst" in self.coo_file or ".rsl" in self.coo_file: 
-          for line in plik:
-             if i>2 and len(line.split())>1: 
-                self.ext_x.append(float(line.split()[1])-1.)
-                self.ext_y.append(float(line.split()[2])-1.)
-                self.ext_l.append(line)
-             i=i+1
+           i=0
+           if ".ap" in self.coo_file:
+              przelacznik=2
+              txt=""
+              for line in plik:
+                 if i>2:
+                    if przelacznik == 0:
+                       txt=line
+                       self.ext_x.append(float(line.split()[1])-1.)
+                       self.ext_y.append(float(line.split()[2])-1.)
+                       przelacznik=1
+                    elif przelacznik == 1:
+                       txt=txt+line
+                       self.ext_l.append(txt)
+                       przelacznik=2
+                    elif przelacznik == 2:
+                       przelacznik=0
+                 i=i+1
 
 
-       elif ".cal" in self.coo_file: 
-          for line in plik:
-             if i>2 and len(line.split())>1: 
-                if "_J" in self.fname.split("/")[-1]:
-                   self.ext_x.append(float(line.split()[2])-1.)
-                   self.ext_y.append(float(line.split()[3])-1.)
-                   self.ext_l.append(line)
-                if "_K" in self.fname.split("/")[-1]:
-                   self.ext_x.append(float(line.split()[4])-1.)
-                   self.ext_y.append(float(line.split()[5])-1.)
-                   self.ext_l.append(line)
-             i=i+1
-             
-       else:
-          try: 
-             for line in plik:
-                 if "#" not in line and len(line.strip())>0: 
-                    self.ext_x.append(float(line.split()[int(self.cfg_xCol)]))
-                    self.ext_y.append(float(line.split()[int(self.cfg_yCol)]))
-                    self.ext_l.append(line)                 
-          except IndexError: 
-                 self.ext_x,self.ext_y,self.ext_l=[],[],[]
-                 self.msg = QMessageBox()
-                 self.msg.setText("Wrong column definition in COO file.\nCheck configuration!")   
-                 self.msg.exec_()          
-       self.coo_p.setStyleSheet("") 
-       self.coo_p.repaint()      # trzeba to tu bo na mac os czasem sie nie updatuje
-       for x in self.tab: x.update()  
+           elif ".raw" in self.coo_file or ".tfr" in self.coo_file or ".out" in self.coo_file or ".coo" in self.coo_file or ".als" in self.coo_file or ".lst" in self.coo_file or ".rsl" in self.coo_file:
+              for line in plik:
+                 if i>2 and len(line.split())>1:
+                    self.ext_x.append(float(line.split()[1])-1.)
+                    self.ext_y.append(float(line.split()[2])-1.)
+                    self.ext_l.append(line)
+                 i=i+1
 
+
+           elif ".cal" in self.coo_file:
+              for line in plik:
+                 if i>2 and len(line.split())>1:
+                    if "_J" in self.fname.split("/")[-1]:
+                       self.ext_x.append(float(line.split()[2])-1.)
+                       self.ext_y.append(float(line.split()[3])-1.)
+                       self.ext_l.append(line)
+                    if "_K" in self.fname.split("/")[-1]:
+                       self.ext_x.append(float(line.split()[4])-1.)
+                       self.ext_y.append(float(line.split()[5])-1.)
+                       self.ext_l.append(line)
+                 i=i+1
+
+           else:
+              try:
+                 for line in plik:
+                     if "#" not in line and len(line.strip())>0:
+                        self.ext_x.append(float(line.split()[int(self.cfg_xCol)]))
+                        self.ext_y.append(float(line.split()[int(self.cfg_yCol)]))
+                        self.ext_l.append(line)
+              except IndexError:
+                     self.ext_x,self.ext_y,self.ext_l=[],[],[]
+                     self.msg = QMessageBox()
+                     self.msg.setText("Wrong column definition in COO file.\nCheck configuration!")
+                     self.msg.exec_()
+           self.coo_p.setStyleSheet("")
+           self.coo_p.repaint()      # trzeba to tu bo na mac os czasem sie nie updatuje
+           for x in self.tab: x.update()
+       except FileNotFoundError:
+           print("no coo file")
 
    def updateHInfo(self):
      
@@ -384,7 +406,8 @@ class FitsView(QWidget):
 
    def load_fits(self):
        self.fname = str( QFileDialog.getOpenFileName(self, 'Open file','.')[0] )
-       self.newFits()
+       if len(self.fname) > 0:
+            self.newFits()
 
 
    def errmssg(self,txt):
@@ -412,7 +435,7 @@ class FitsView(QWidget):
                 OK=True
              except: OK=False
              if OK:
-                self.tab.append(Image(self,self.hdu[n]))
+                self.tab.append(FitsView_image.Image(self,self.hdu[n]))
                 self.tab[-1].update()
                 self.TabWindow.insertTab(i,self.tab[-1],"IMAGE")
                 i=i+1
