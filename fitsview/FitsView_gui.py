@@ -303,7 +303,7 @@ class FitsView(QWidget):
      
        self.setWindowTitle(self.fname)
        self.hinfo_e.clear()
-       self.hinfo_e.setFont(QtGui.QFont("Courier"))
+       self.hinfo_e.setFont(QtGui.QFont("Monospace"))
        
        hdu=self.hdu[0].header
        
