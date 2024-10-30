@@ -4,6 +4,7 @@ FS*
 test.fits 
 test.txt
 
+poetry.lock
 .idea
 
 # Mac os X
