@@ -39,6 +39,7 @@ class FitsView(QWidget):
        self.args=args
 
        self.fits_directory = os.getcwd()
+       self.current_tab_n = 1
        self.active_windows=[]
        self.initiate()
        self.mkUI()
@@ -107,8 +108,8 @@ class FitsView(QWidget):
 
           self.getFits()
           self.updateUI()
-          self.TabWindow.setCurrentIndex(1)
-          self.TabWindow.setCurrentIndex(int(self.cfg_active_tab))
+          self.TabWindow.setCurrentIndex(self.current_tab_n)
+          #self.TabWindow.setCurrentIndex(int(self.cfg_active_tab))
           self.updateCooList()
        else: 
           self.msg = QMessageBox()
@@ -149,10 +150,15 @@ class FitsView(QWidget):
        for okno in self.active_windows: okno.close()
        self.close()
 
+   def curent_tab_changed(self,i):
+       self.current_tab_n = i
+       print("CHANGED: ", self.current_tab_n)
+
    def mkUI(self):
        
        
        self.TabWindow=QTabWidget()
+       self.TabWindow.tabBarClicked.connect(self.curent_tab_changed)
        
        self.load_p = QPushButton("Load FITS")
        self.load_p.clicked.connect(self.load_fits)
