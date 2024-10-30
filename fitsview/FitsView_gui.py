@@ -37,7 +37,8 @@ class FitsView(QWidget):
          
        
        self.args=args
-       
+
+       self.fits_directory = os.getcwd()
        self.active_windows=[]
        self.initiate()
        self.mkUI()
@@ -66,13 +67,13 @@ class FitsView(QWidget):
        #print(self.hdu.info())
 
    def nextFits(self):
-       print(f'CWD: {os.getcwd()}')
-       lista = sorted([f for f in os.listdir(os.getcwd()) if ".fits" in f])
-       if self.fname in lista:
-           i = lista.index(self.fname)
+       lista = sorted([f for f in os.listdir(self.fits_directory) if ".fits" in f])
+       fname = str(os.path.basename(self.fname))
+       if fname in lista:
+           i = lista.index(fname)
            if i < len(lista) - 1:
                i = i + 1
-               self.fname = lista[i]
+               self.fname = self.fits_directory+"/"+lista[i]
                self.newFits()
 
 
@@ -81,13 +82,13 @@ class FitsView(QWidget):
 
 
    def prevFits(self):
-       print(f'CWD: {os.getcwd()}')
-       lista = sorted([f for f in os.listdir(os.getcwd()) if ".fits" in f])
-       if self.fname in lista:
-           i = lista.index(self.fname)
+       lista = sorted([f for f in os.listdir(self.fits_directory) if ".fits" in f])
+       fname = str(os.path.basename(self.fname))
+       if fname in lista:
+           i = lista.index(fname)
            if i > 0:
                i = i - 1
-               self.fname = lista[i]
+               self.fname = self.fits_directory+"/"+lista[i]
                self.newFits()
 
 
@@ -116,7 +117,7 @@ class FitsView(QWidget):
 
    def updateCooList(self):
        basename=self.fname.replace(".fits","").split("/")[-1]
-       opcje = [f for f in os.listdir(os.getcwd()) if basename in f]
+       opcje = [f for f in os.listdir(self.fits_directory) if basename in f]
        opcje=["other file"]+opcje
        if self.fname.split("/")[-1] in opcje: opcje.remove(self.fname.split("/")[-1])
        self.coo_l.clear()
@@ -296,14 +297,14 @@ class FitsView(QWidget):
            self.coo_p.setStyleSheet("")
            self.coo_p.repaint()      # trzeba to tu bo na mac os czasem sie nie updatuje
            for x in self.tab: x.update()
-       except FileNotFoundError:
+       except (FileNotFoundError, ValueError):
            print("no coo file")
 
    def updateHInfo(self):
      
        self.setWindowTitle(self.fname)
        self.hinfo_e.clear()
-       self.hinfo_e.setFont(QtGui.QFont("Monospace"))
+       self.hinfo_e.setFont(QtGui.QFont("Courier New"))
        
        hdu=self.hdu[0].header
        
@@ -406,9 +407,10 @@ class FitsView(QWidget):
        
 
    def load_fits(self):
-       self.fname = str( QFileDialog.getOpenFileName(self, 'Open file','.')[0] )
+       self.fname = str( QFileDialog.getOpenFileName(self, 'Open file',self.fits_directory)[0] )
        if len(self.fname) > 0:
-            self.newFits()
+         self.fits_directory = os.path.dirname(self.fname)
+         self.newFits()
 
 
    def errmssg(self,txt):

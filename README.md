@@ -88,10 +88,15 @@ FV_window.special=False
 FV_window.com.xPressed.disconnect(self.stopFunction) 
 ```
 
+### Install:
+```console
+pipx install .
+```
 
 ### Reinstall:
+```console
 pipx reinstall fitsview
-
+```
 #### Libraries:
 
 Python3  
