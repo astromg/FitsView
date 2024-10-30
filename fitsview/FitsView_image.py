@@ -769,9 +769,9 @@ class Image(QWidget):
 
        if "r" in event.key:
          
-          if not self.r_window: 
+          if not self.r_window:
              self.r_window=FitsView_widgets.PlotWindow(self)
-             self.parent.active_windows.append(self.r_window)        
+             self.parent.active_windows.append(self.r_window)
 
           self.r_window.show()
           self.r_window.raise_()  
@@ -837,6 +837,7 @@ class Image(QWidget):
           self.r_window.txt=txt
           self.r_window.update()
           self.r_window.raise_()
+
           
           print(txt2)
 

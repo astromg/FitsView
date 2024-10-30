@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+from PyQt5.QtCore import Qt
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import QMainWindow, QWidget, QLabel, QTextEdit, QLineEdit, 
 class HeaderTabLocal(QWidget):
    def __init__(self,parent,header): 
        QWidget.__init__(self)
-       
+       self.setWindowFlag(Qt.Tool)
        self.parent=parent
        self.header=header
        self.setWindowTitle('HDR')
@@ -55,6 +55,7 @@ class HeaderTabLocal(QWidget):
 class TextWindow(QWidget):
   def __init__(self,parent):
       QWidget.__init__(self)
+      self.setWindowFlag(Qt.Tool)
       self.parent=parent
       self.setWindowTitle('Querry')
       
@@ -91,6 +92,7 @@ class TextWindow(QWidget):
 class PlotWindow(QWidget):
     def __init__(self,parent):
         QWidget.__init__(self)
+        self.setWindowFlag(Qt.Tool)
         self.parent=parent
         self.setWindowTitle('Plot')
         self.txt=""

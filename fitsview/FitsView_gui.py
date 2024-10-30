@@ -152,7 +152,6 @@ class FitsView(QWidget):
 
    def curent_tab_changed(self,i):
        self.current_tab_n = i
-       print("CHANGED: ", self.current_tab_n)
 
    def mkUI(self):
        
