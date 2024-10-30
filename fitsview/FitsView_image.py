@@ -503,12 +503,15 @@ class Image(QWidget):
              
           dane=self.dane[int(y1):int(y2),int(x1):int(x2)]
 
+          q34 = (numpy.quantile(dane, 0.83725) - numpy.quantile(dane, 0.16275))/2.
+
           txt = "selected x=(%.2f,%.2f)  y=(%.2f,%.2f)\n"%(x1,x2,y1,y2) 
           txt = txt+"min: %.2f\n"%(dane.min()) 
           txt = txt+"max: %.2f\n"%(dane.max()) 
           txt = txt+"mean: %.2f\n"%(numpy.mean(dane)) 
           txt = txt+"median: %.2f\n"%(numpy.median(dane)) 
-          txt = txt+"spread: %.2f\n"%(numpy.std(dane))           
+          txt = txt+"spread: %.2f\n"%(numpy.std(dane))
+          txt = txt + "sigma_q34: %.2f\n" % (q34)
 
           self.text_window.txt=txt
           self.text_window.update()
