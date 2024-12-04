@@ -425,6 +425,9 @@ class FitsView(QWidget):
 
    def updateUI(self):
 
+       # ToDo wypluwac jakies informacje o samym fits
+       print(self.hdu.info())
+
        self.updateHInfo()
        n=0
        i=0
@@ -434,11 +437,12 @@ class FitsView(QWidget):
 
        self.TabWindow.insertTab(i,self.tab[-1],"Primary Header")
        i=i+1
-       while n<self.Nhdu:   
+       while n < self.Nhdu:
+          print(type(self.hdu[n]))
           if self.hdu[n].data is None: pass
-          else: 
-             OK=False 
-             try: 
+          elif self.hdu[n].name == 'SCI' or self.hdu[n].name == 'PRIMARY':
+             OK=False
+             try:
                 self.hdu[n].data.min()
                 OK=True
              except: OK=False
@@ -463,8 +467,6 @@ class FitsView(QWidget):
    def getFits(self):
        self.hdu=fits.open(self.fname)
        self.Nhdu = len(self.hdu)
-       
-       #print self.hdu.info()
 
    def conf(self):       # CONFIG LOAD AND DEFINE
        cfg_file=[]
