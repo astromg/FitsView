@@ -6,6 +6,8 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 from PyQt5.QtWidgets import QMainWindow, QWidget, QLabel, QTextEdit, QLineEdit, QPushButton, \
     QGridLayout, QHBoxLayout, QVBoxLayout
 
+import fitsq
+
 class HeaderTabLocal(QWidget):
    def __init__(self,parent,header): 
        QWidget.__init__(self)
@@ -143,4 +145,76 @@ class PlotWindow(QWidget):
         else:
             self.toolbar.hide()
         QMainWindow.resizeEvent(self, event)
-          
+
+class FQWindow(QWidget):
+    def __init__(self, parent):
+        QWidget.__init__(self)
+        self.setWindowFlag(Qt.Tool)
+        self.parent = parent
+        self.setWindowTitle('Fitsonometry')
+
+        self.mkUI()
+        self.txt_e.append(f'Fits Q version={fitsq.__version__}\n')
+
+    def basic_stats(self):
+        self.fq = fitsq.FQS()
+        self.fq.image = self.parent.dane
+        self.fq.basic_stats()
+        txt = str(self.fq.stats)
+        self.txt_e.append(txt+"\n")
+
+    def find_stars(self):
+
+        th = float(self.th_e.text())
+        fwhm = float(self.fwhm_e.text())
+        self.fq.find_stars(threshold=th, kernel_size=30, fwhm=fwhm)
+        coo = self.fq.stats["stars"]["coo"]
+        x = coo[:,0]
+        y = coo[:,1]
+        self.parent.axes.plot(y, x, 'o', markerfacecolor='none', markeredgecolor='blue', markersize=10,alpha=0.5)
+        self.parent.canvas.draw()
+
+    def mkUI(self):
+
+
+        grid = QGridLayout()
+        w = 0
+        self.basic_p = QPushButton('Basic stats', self)
+        self.basic_p.clicked.connect(self.basic_stats)
+
+        grid.addWidget(self.basic_p, w, 0)
+        w = w + 1
+
+        self.find_p = QPushButton('Find stars', self)
+        self.find_p.clicked.connect(self.find_stars)
+        self.th_l = QLabel("th:")
+        self.th_e = QLineEdit("5")
+        self.fwhm_l = QLabel("fwhm:")
+        self.fwhm_e = QLineEdit("3")
+
+        grid.addWidget(self.th_l, w, 0)
+        grid.addWidget(self.th_e, w, 1)
+        w = w + 1
+        grid.addWidget(self.fwhm_l, w, 0)
+        grid.addWidget(self.fwhm_e, w, 1)
+        w = w + 1
+        grid.addWidget(self.find_p, w, 0)
+        w = w + 1
+
+        self.txt_e = QTextEdit()
+
+        grid.addWidget(self.txt_e, w, 0, 1, 3)
+        w = w + 3
+
+        self.cl = QPushButton('Close', self)
+        self.cl.clicked.connect(self.close_window)
+
+        grid.addWidget(self.cl, w, 0)
+
+        self.setLayout(grid)
+        gm = eval(self.parent.parent.cfg_geometry)
+        self.setGeometry(int(gm[1]) + int(gm[2]) + 10, int(gm[1]), 400, 500)
+        self.show()
+
+    def close_window(self):
+        self.close()

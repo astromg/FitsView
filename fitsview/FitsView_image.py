@@ -22,12 +22,14 @@ from scipy.optimize import curve_fit
 
 from fitsview import FitsView_widgets
 
+
+
 from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QLabel,QCheckBox, QTextEdit, QMessageBox, QLineEdit, QDialog, QTabWidget, QPushButton, QFileDialog, QGridLayout, QHBoxLayout, QVBoxLayout, QInputDialog,QComboBox, QSlider
 from PyQt5 import QtCore, QtGui
  
         
 class Image(QWidget):
-   def __init__(self,parent,hdu): 
+    def __init__(self,parent,hdu):
        QWidget.__init__(self)
        
 
@@ -61,7 +63,7 @@ class Image(QWidget):
 
 
        self.savePic_p.clicked.connect(self.save_pic)
-       self.header_p .clicked.connect(self.show_header)
+       self.header_p.clicked.connect(self.show_header)
        self.zoom_s.valueChanged.connect(self.zmiana_zoom)
        self.auto_p.clicked.connect(self.clim_auto)
        self.max_s.valueChanged.connect(self.zmiana_vmax)
@@ -80,14 +82,14 @@ class Image(QWidget):
        self.saturation_e.editingFinished.connect(self.zmiana_saturation)
        
 
-   def initiatie(self):
+    def initiatie(self):
        self.x=int(len(self.dane[0])/2)
        self.y=int(len(self.dane)/2)   
        self.saturation_e.setText(str(self.parent.cfg_saturation))
        index = self.cmap_s.findText(str(self.parent.cfg_cmap).strip())
        self.cmap_s.setCurrentIndex(index) 
    
-   def zmiana_saturation(self):
+    def zmiana_saturation(self):
        if self.saturation_c.checkState(): self.parent.cfg_showsat=True
        else: self.parent.cfg_showsat=False
        try: self.parent.cfg_saturation=float(self.saturation_e.text())
@@ -97,7 +99,7 @@ class Image(QWidget):
             self.saturation_e.setText(str(self.parent.cfg_saturation))
        self.update()
    
-   def show_optiones(self):
+    def show_optiones(self):
     
        if self.optiones:
           self.shopt_p.setText("Hide optiones")
@@ -139,7 +141,7 @@ class Image(QWidget):
           self.optiones=True
 
 
-   def update(self): 
+    def update(self):
      
        #try: self.axes.lines[-1].remove()
        #except: pass     
@@ -232,7 +234,7 @@ class Image(QWidget):
        self.zmiana_zoom()
        self.reset_viewfinder()
        
-   def reset_viewfinder(self):
+    def reset_viewfinder(self):
      
        if self.parent.cfg_rot90: 
           dane=numpy.rot90(self.dane)
@@ -259,7 +261,7 @@ class Image(QWidget):
        self.canvas_viewfinder.draw()   
    
 
-   def change_clim(self):
+    def change_clim(self):
 
        a=self.min_e.text()
        b=self.max_e.text()
@@ -272,7 +274,7 @@ class Image(QWidget):
           self.min_s.setRange(int(float(a)),int(float(b)))
           self.max_s.setRange(int(float(a)),int(float(b)))
 
-   def clim_auto(self): 
+    def clim_auto(self):
        c0 = numpy.median(self.dane,axis=None)
        c_sigma=numpy.std(self.dane,axis=None)
        if c_sigma==numpy.inf: c_sigma=5.
@@ -285,13 +287,13 @@ class Image(QWidget):
        self.min_s.setValue(int(c0-c_sigma))
        self.max_s.setValue(int(c0+c_sigma))
 
-   def fit_image(self):
+    def fit_image(self):
        self.zoom_s.setValue(1)
        self.x=int(len(self.dane[0])/2)
        self.y=int(len(self.dane)/2)
        self.zmiana_zoom()
 
-   def zmiana_zoom(self):
+    def zmiana_zoom(self):
      
        z=len(self.dane[0]) - self.zoom_s.value() + 1
        z=int(z/2.)
@@ -324,7 +326,7 @@ class Image(QWidget):
 
        self.canvas_small.draw()
 
-   def update_cfg(self):
+    def update_cfg(self):
 
        self.zoom_s.setValue(int(float(self.parent.cfg_zoom)))
        if self.parent.cfg_zoomX: self.x=float(self.parent.cfg_zoomX)
@@ -333,14 +335,14 @@ class Image(QWidget):
        self.zmiana_zoom()
 
 
-   def mouse_move(self,event):
+    def mouse_move(self,event):
        try:
           x=event.xdata
           y=event.ydata
           self.update_viewfinder(x,y)
        except: pass
 
-   def update_viewfinder(self,x,y):
+    def update_viewfinder(self,x,y):
        x=x
        y=y
        
@@ -377,22 +379,22 @@ class Image(QWidget):
        self.canvas_viewfinder.draw()
        self.canvas.setFocus()
 
-   def image_clicked(self,event):
+    def image_clicked(self,event):
        self.x = event.xdata
        self.y = event.ydata
        self.zmiana_zoom()
 
-   def zmiana_flipX(self):
+    def zmiana_flipX(self):
        if self.flipX_c.checkState(): self.parent.cfg_flipX=True
        else: self.parent.cfg_flipX=False
        self.zmiana_zoom()
 
-   def zmiana_flipY(self):
+    def zmiana_flipY(self):
        if self.flipY_c.checkState(): self.parent.cfg_flipY=True
        else: self.parent.cfg_flipY=False
        self.zmiana_zoom()
 
-   def zmiana_rot90(self):
+    def zmiana_rot90(self):
        if self.rot90_c.checkState(): 
           self.parent.cfg_rot90=True
           x,y=self.x,self.y          
@@ -406,12 +408,12 @@ class Image(QWidget):
 
        self.update()
        
-   def zmiana_cmap(self):
+    def zmiana_cmap(self):
        self.parent.cfg_cmap=str(self.cmap_s.currentText())
        self.update()
 
  
-   def zmiana_vmin(self): 
+    def zmiana_vmin(self):
        vmin=self.min_s.value()
        vmax=self.max_s.value()
        
@@ -426,7 +428,7 @@ class Image(QWidget):
        self.canvas_viewfinder.draw()
        self.canvas_small.draw()
 
-   def zmiana_vmax(self): 
+    def zmiana_vmax(self):
        vmin=self.min_s.value()
        vmax=self.max_s.value()
        
@@ -441,7 +443,7 @@ class Image(QWidget):
        self.canvas_viewfinder.draw()
        self.canvas_small.draw()
 
-   def save_pic(self):
+    def save_pic(self):
        
        txt="./"+str(self.parent.fname).split(".")[0]+".png"
        sfile = str( QFileDialog.getSaveFileName(self, 'Save as',txt)[0] )
@@ -453,13 +455,13 @@ class Image(QWidget):
        #frameon=None, metadata=None)
 
  
-   def show_header(self): 
+    def show_header(self):
        self.hdrl_window=FitsView_widgets.HeaderTabLocal(self,self.hdr)
        self.parent.active_windows.append(self.hdrl_window)
 
        
        
-   def keypressed(self,event):
+    def keypressed(self,event):
        if not self.text_window: 
           self.text_window=FitsView_widgets.TextWindow(self)
           self.parent.active_windows.append(self.text_window)
@@ -848,11 +850,14 @@ class Image(QWidget):
        self.update_viewfinder(x,y)
 
 
-   def gaus(self,x,a,sigma,c0):
+    def gaus(self,x,a,sigma,c0):
        x0=0
        return a*numpy.exp(-(x-x0)**2/(2*sigma**2))+c0
 
-   def mkUI(self):       
+    def run_fitsQ(self):
+        self.fq_window = FitsView_widgets.FQWindow(self)
+
+    def mkUI(self):
 
        self.coor_l=QLabel()
        #self.coor_l=QLineEdit()          
@@ -912,7 +917,9 @@ class Image(QWidget):
        if len(self.dane)>len(self.dane[0]): self.zoom_s.setRange(int(-0.3*len(self.dane)),int(len(self.dane)-1))
        else: self.zoom_s.setRange(int(-0.3*len(self.dane[0])),int(len(self.dane[0])))
        self.zoom_s.setValue(1)
-       
+
+       self.fitsQ_p = QPushButton('Fits Q')
+       self.fitsQ_p.clicked.connect(self.run_fitsQ)
        self.header_p =  QPushButton('Header')
        self.savePic_p =  QPushButton('Save Pic')
 
@@ -979,16 +986,18 @@ class Image(QWidget):
        
     
        # prawa strona
+
        grid.addWidget(self.coor_l,0,6,1,2)
        grid.addWidget(self.canvas_viewfinder,1,6,1,2)
        grid.addWidget(self.canvas_small,2,6,1,2)
        grid.addWidget(self.zoom_s,3,6,1,2)
 
 
-       grid.addWidget(self.header_p,4,6)   
+       grid.addWidget(self.header_p,4,6)
        grid.addWidget(self.fitI_p,4,7)
-       grid.addWidget(self.shopt_p,5,6,1,2)       
+       grid.addWidget(self.shopt_p,5,6,1,2)
 
+       grid.addWidget(self.fitsQ_p, 6, 6, 1, 2)
 
        self.setLayout(grid)
        grid.setRowStretch(0,0)
