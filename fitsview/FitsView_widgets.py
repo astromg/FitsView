@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import numpy as np
+
 from PyQt5.QtCore import Qt
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -6,7 +8,7 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 from PyQt5.QtWidgets import QMainWindow, QWidget, QLabel, QTextEdit, QLineEdit, QPushButton, \
     QGridLayout, QHBoxLayout, QVBoxLayout
 
-import fitsq
+import fitsview.fitsq as fitsq
 
 class HeaderTabLocal(QWidget):
    def __init__(self,parent,header): 
@@ -161,7 +163,7 @@ class FQWindow(QWidget):
         self.fq.image = self.parent.dane
         self.fq.basic_stats()
         txt = str(self.fq.stats)
-        self.txt_e.append(txt+"\n")
+        self.txt_e.append(txt)
 
     def find_stars(self):
 
@@ -171,8 +173,72 @@ class FQWindow(QWidget):
         coo = self.fq.stats["stars"]["coo"]
         x = coo[:,0]
         y = coo[:,1]
-        self.parent.axes.plot(y, x, 'o', markerfacecolor='none', markeredgecolor='blue', markersize=10,alpha=0.5)
+        self.markings, = self.parent.axes.plot(y, x, 'o', markerfacecolor='none', markeredgecolor='blue', markersize=10,alpha=0.5)
         self.parent.canvas.draw()
+
+    def fwhm_clicked(self):
+        self.fq.fwhm(self.fq.stats,saturation=65000, radius=10, all_stars=True)
+        txt = f'fwhm x = {self.fq.stats["fwhm_x"]:.2f}'
+        self.txt_e.append(txt)
+        txt = f'fwhm y = {self.fq.stats["fwhm_y"]:.2f}'
+        self.txt_e.append(txt)
+        self.markings.remove()
+
+        coo = self.fq.stats["stars"]["coo"]
+        x = coo[:,0]
+        y = coo[:,1]
+        fwhm = (np.array(self.fq.stats["stars"]["fwhm_xarr"]) + np.array(self.fq.stats["stars"]["fwhm_xarr"]))/2
+
+        self.markings = self.parent.axes.scatter(y,x, marker="o",c=fwhm, facecolors="none", edgecolors="face", s=fwhm, linewidths=0.5, alpha=1)
+        self.parent.canvas.draw()
+
+    def cray_clicked(self):
+        #self.markings.remove()
+        maska0, crays_x, crays_y = self.fq.cosmic_ray_detection(self.fq.image)
+        X, Y = np.meshgrid(np.arange(self.fq.image.shape[1]), np.arange(self.fq.image.shape[0]))
+        self.countours = self.parent.axes.contour(X,Y, maska0, 0, colors='red',linewidths=1)
+        self.parent.canvas.draw()
+
+
+    def flines_clicked(self):
+
+        k1 = int(self.k1_e.text())
+        k2 = int(self.k2_e.text())
+        th1 = float(self.k1th_e.text())
+        th2 = float(self.k2th_e.text())
+
+        maska0 = self.fq.line_detection(self.fq.image,k1=k1,k2=k2,th1=th1,th2=th2)
+
+        try:
+            self.markings.remove()
+        except AttributeError:
+            pass
+
+        X, Y = np.meshgrid(np.arange(self.fq.image.shape[1]), np.arange(self.fq.image.shape[0]))
+        self.markings = self.parent.axes.contour(X,Y, maska0, 0, colors='red',linewidths=1)
+        self.parent.canvas.draw()
+
+
+
+    def sky_background_clicked(self):
+        self.fq.sky_gradient(self.fq.image,n_segments=10)
+
+        txt = f"max amplitude: {self.fq.max_amplitude:.2f}"
+        self.txt_e.append(txt)
+        txt = f"max frame gradient: {self.fq.frame_gradient:.2f}"
+        self.txt_e.append(txt)
+
+        x = self.fq.sky_surface_x
+        y = self.fq.sky_surface_y
+        bk = self.fq.sky_surface_bk
+
+        try:
+            self.markings.remove()
+        except AttributeError:
+            pass
+        self.markings = self.parent.axes.scatter(x,y, marker="o",c=bk, facecolors="none", edgecolors="face", s=50, linewidths=0.5, alpha=1)
+        self.parent.canvas.draw()
+
 
     def mkUI(self):
 
@@ -188,7 +254,7 @@ class FQWindow(QWidget):
         self.find_p = QPushButton('Find stars', self)
         self.find_p.clicked.connect(self.find_stars)
         self.th_l = QLabel("th:")
-        self.th_e = QLineEdit("5")
+        self.th_e = QLineEdit("10")
         self.fwhm_l = QLabel("fwhm:")
         self.fwhm_e = QLineEdit("3")
 
@@ -199,6 +265,38 @@ class FQWindow(QWidget):
         grid.addWidget(self.fwhm_e, w, 1)
         w = w + 1
         grid.addWidget(self.find_p, w, 0)
+        w = w + 1
+        self.fwhm_p = QPushButton('find FWHM', self)
+        self.fwhm_p.clicked.connect(self.fwhm_clicked)
+        grid.addWidget(self.fwhm_p, w, 0)
+        w = w + 1
+        self.bkg_p = QPushButton('sky background', self)
+        self.bkg_p.clicked.connect(self.sky_background_clicked)
+        grid.addWidget(self.bkg_p, w, 0)
+        w = w + 1
+        self.k1_l = QLabel("k1 / th1:")
+        self.k1_e = QLineEdit("3")
+        self.k1th_e = QLineEdit("3")
+
+        self.k2_l = QLabel("k2 / th2:")
+        self.k2_e = QLineEdit("7")
+        self.k2th_e = QLineEdit("3")
+
+        self.flines_p = QPushButton('find lines', self)
+        self.flines_p.clicked.connect(self.flines_clicked)
+        grid.addWidget(self.k1_l, w, 0)
+        grid.addWidget(self.k1_e, w, 1)
+        grid.addWidget(self.k1th_e, w, 2)
+        w = w + 1
+        grid.addWidget(self.k2_l, w, 0)
+        grid.addWidget(self.k2_e, w, 1)
+        grid.addWidget(self.k2th_e, w, 2)
+        w = w + 1
+        grid.addWidget(self.flines_p, w, 0)
+        w = w + 1
+        self.cray_p = QPushButton('find cosmic rays', self)
+        self.cray_p.clicked.connect(self.cray_clicked)
+        grid.addWidget(self.cray_p, w, 0)
         w = w + 1
 
         self.txt_e = QTextEdit()
@@ -218,3 +316,4 @@ class FQWindow(QWidget):
 
     def close_window(self):
         self.close()
+
