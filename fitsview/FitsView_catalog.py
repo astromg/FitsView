@@ -21,18 +21,17 @@ from PyQt5.QtCore import QAbstractTableModel, Qt, QModelIndex, QItemSelectionMod
 
 
 class Catalog(QWidget):
-    def __init__(self,parent,hdu):
+    def __init__(self,parent,data):
         QWidget.__init__(self)
 
-        self.data = None
-        self.hdu=hdu
+        self.data = data
         self.mkUI()
         self.initiatie()
         self.select_row(2)
 
 
     def initiatie(self):
-        self.data = Table(self.hdu.data, copy=False)
+
         self.model = FitsTableModel(self.data)
 
 
