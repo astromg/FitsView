@@ -13,6 +13,9 @@ import matplotlib, numpy
 import matplotlib.patches as patches
 from astropy.io import fits
 from astropy.utils.exceptions import AstropyWarning
+
+from astropy.table import Table
+
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
@@ -20,7 +23,7 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QMessageBox, QLabel,QCheckBox, QComboBox, QTextEdit, QLineEdit, QDialog, QTabWidget, QPushButton, QFileDialog, QGridLayout, QHBoxLayout, QVBoxLayout, QMessageBox
 from PyQt5 import QtCore, QtGui
 
-from fitsview import FitsView_image
+from fitsview import FitsView_image, FitsView_catalog
 
 warnings.simplefilter('ignore', category=AstropyWarning)
 
@@ -64,6 +67,10 @@ class FitsView(QWidget):
        self.ext_l=[]      
        self.special=False
 
+
+
+
+
        
        #print(self.hdu.info())
 
@@ -76,9 +83,6 @@ class FitsView(QWidget):
                i = i + 1
                self.fname = self.fits_directory+"/"+lista[i]
                self.newFits()
-
-
-
 
 
 
@@ -451,6 +455,12 @@ class FitsView(QWidget):
                 self.tab[-1].update()
                 self.TabWindow.insertTab(i,self.tab[-1],"IMAGE")
                 i=i+1
+          elif self.hdu[n].name == 'CATALOG':
+              self.tab.append(FitsView_catalog.Catalog(self, self.hdu[n]))
+              self.tab[-1].update()
+              self.TabWindow.insertTab(i, self.tab[-1], "FITS CATALOG")
+              i = i + 1
+              print(self.hdu[n].name)
   
           n=n+1
        #self.TabWindow.setCurrentIndex(0)          
