@@ -85,11 +85,15 @@ class Catalog(QWidget):
     def update(self):
         pass
 
+    def update_selection(self):
+        i = self.parent.table_data[self.data_index]["selected_index"]
+        self.select_row(i)
+
     def select_row(self, row):
         model = self.data_t.model()
         index = model.index(row, 0)
         selection_model = self.data_t.selectionModel()
-        if row > 0:
+        if row >= 0:
             selection_model.select(index, QItemSelectionModel.ClearAndSelect | QItemSelectionModel.Rows)
             self.data_t.scrollTo(index)
         else:

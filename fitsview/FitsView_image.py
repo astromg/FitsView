@@ -533,23 +533,23 @@ class Image(QWidget):
 
 
     def keypressed(self,event):
-       if not self.text_window:
+        if not self.text_window:
           self.text_window=FitsView_widgets.TextWindow(self)
           self.parent.active_windows.append(self.text_window)
 
-       x=event.xdata
-       y=event.ydata
-       xr,yr=x,y
+        x=event.xdata
+        y=event.ydata
+        xr,yr=x,y
 
-       if self.parent.cfg_rot90:
+        if self.parent.cfg_rot90:
           xr=len(self.dane[0])-y
           yr=x
 
-       if self.parent.special:
+        if self.parent.special:
           self.parent.com.xPressed.emit(event.key,xr,yr)
 
 
-       if "m" in event.key:
+        if "m" in event.key:
           self.int_x.append(xr)
           self.int_y.append(yr)
           self.update()
@@ -561,7 +561,7 @@ class Image(QWidget):
           print(txt)
 
 
-       if "s" in event.key:
+        if "s" in event.key:
           self.int_x.append(xr)
           self.int_y.append(yr)
           self.update()
@@ -593,7 +593,7 @@ class Image(QWidget):
 
 
 
-       if "d" in event.key and not self.parent.special:
+        if "d" in event.key and not self.parent.special:
           if len(self.int_x)>0:
              diffx = numpy.array(self.int_x)-float(xr)
              diffy = numpy.array(self.int_y)-float(yr)
@@ -603,22 +603,54 @@ class Image(QWidget):
              del self.int_y[n]
              self.update()
 
-       if "f" in event.key:
-          diffx = numpy.array(self.ext_x)-float(xr)
-          diffy = numpy.array(self.ext_y)-float(yr)
-          diff=diffx**2+diffy**2
-          n=numpy.argmin(diff)
-          x=self.ext_x[n]
-          y=self.ext_y[n]
-          self.int_x.append(x)
-          self.int_y.append(y)
-          self.update()
-          txt = self.parent.ext_l[n]
-          self.text_window.txt=txt
-          self.text_window.update()
-          print(txt)
+        if "f" in event.key:
+            # diffx = numpy.array(self.ext_x)-float(xr)
+            # diffy = numpy.array(self.ext_y)-float(yr)
+            # diff=diffx**2+diffy**2
+            # n=numpy.argmin(diff)
+            # x=self.ext_x[n]
+            # y=self.ext_y[n]
+            # self.int_x.append(x)
+            # self.int_y.append(y)
+            # self.update()
+            # txt = self.parent.ext_l[n]
+            # self.text_window.txt=txt
+            # self.text_window.update()
+            # print(txt)
 
-       if "b" in event.key:
+            # DUPA
+            for zestaw in self.parent.table_data:
+                if zestaw["plot_image"]:
+                    if "xcol" in zestaw.keys() and "ycol" in zestaw.keys():
+                        xc = zestaw["xcol"]
+                        yc = zestaw["ycol"]
+
+                        x = zestaw["data"][xc]
+                        y = zestaw["data"][yc]
+
+                        diffx = numpy.array(x) - float(xr)
+                        diffy = numpy.array(y) - float(yr)
+                        diff = diffx ** 2 + diffy ** 2
+                        n = numpy.argmin(diff)
+
+                        if zestaw["selected_index"] == n:
+                            zestaw["selected_index"] = -1
+                        else:
+                            zestaw["selected_index"] = n
+                            txt = f'{zestaw["name"]}:\n {zestaw["data"][n]}\n'
+                            self.text_window.txt=txt
+                            self.text_window.update()
+                            print(txt)
+
+                        self.update_points()
+
+            for tab in self.parent.tab:
+                if hasattr(tab, "update_selection"):
+                    tab.update_selection()
+
+
+
+        if "b" in event.key:
           r=int(self.parent.cfg_apersize)
           dane = self.dane[int(yr)-r:int(yr)+r,int(xr)-r:int(xr)+r]
           x0=(len(dane[0])/2.)
@@ -641,7 +673,7 @@ class Image(QWidget):
           print(txt2)
 
 
-       if "q" in event.key:
+        if "q" in event.key:
           r=int(self.parent.cfg_apersize)
           dane = self.dane[int(yr)-r:int(yr)+r,int(xr)-r:int(xr)+r]
           x0=(len(dane[0])/2.)
@@ -663,7 +695,7 @@ class Image(QWidget):
           self.text_window.update()
           print(txt2)
 
-       if "z" in event.key:
+        if "z" in event.key:
           r=int(self.parent.cfg_apersize)
           dane = self.dane[int(yr)-r:int(yr)+r,int(xr)-r:int(xr)+r]
           x1=(len(dane[0])/2.)
@@ -702,7 +734,7 @@ class Image(QWidget):
           self.text_window.update()
           print(txt2)
 
-       if "g" in event.key:
+        if "g" in event.key:
           xy, ok = QInputDialog.getText(self, 'Go To', 'Enter X Y:')
           if "," in xy: x,y = float(str(xy).split(",")[0]),float(str(xy).split(",")[1])
           else: x,y = float(str(xy).split()[0]),float(str(xy).split()[1])
@@ -723,7 +755,7 @@ class Image(QWidget):
           print(txt2)
 
 
-       if "l" in event.key:
+        if "l" in event.key:
           if not self.c_window:
              self.c_window=FitsView_widgets.PlotWindow(self)
              self.parent.active_windows.append(self.c_window)
@@ -762,7 +794,7 @@ class Image(QWidget):
 
 
 
-       if "c" in event.key:
+        if "c" in event.key:
           if not self.c_window:
              self.c_window=FitsView_widgets.PlotWindow(self)
              self.parent.active_windows.append(self.c_window)
@@ -800,7 +832,7 @@ class Image(QWidget):
           self.c_window.raise_()
           print(txt)
 
-       if "e" in event.key:
+        if "e" in event.key:
 
           if not self.e_window:
              self.e_window=FitsView_widgets.PlotWindow(self)
@@ -844,7 +876,7 @@ class Image(QWidget):
 
           print(txt)
 
-       if "r" in event.key:
+        if "r" in event.key:
 
           if not self.r_window:
              self.r_window=FitsView_widgets.PlotWindow(self)
@@ -918,7 +950,7 @@ class Image(QWidget):
 
           print(txt2)
 
-       self.update_viewfinder(x,y)
+        self.update_viewfinder(x,y)
 
 
     def gaus(self,x,a,sigma,c0):

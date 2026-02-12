@@ -52,6 +52,22 @@ def daophot_files_parser(file_name):
                 "param": np.array(dane[6], dtype=float),
             }
 
+    elif file_name.endswith(".lst"):
+        with open(file_name) as f:
+            lines = [l.rstrip() for l in f if l.strip()]
+            dane = []
+            data_lines = lines[2:]  # wywalam naglowek
+            for l in data_lines:
+                dane.append(l.split())
+            dane = list(zip(*dane))
+            cols = {
+                "id": np.array(dane[0], dtype=int),
+                "x": np.array(dane[1], dtype=float) - 1.0,
+                "y": np.array(dane[2], dtype=float) - 1.0,
+                "mag": np.array(dane[3], dtype=float),
+                "err": np.array(dane[4], dtype=float),
+                "param": np.array(dane[5], dtype=float),
+            }
 
     tab = Table(cols)
     return tab

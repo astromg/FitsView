@@ -237,7 +237,7 @@ class FitsView(QWidget):
             ok=True
           except: ok=False
           if ok:
-              if self.coo_file!=None:
+              if self.coo_file != None:
                   self.load_coo()
        else:
           self.coo_file=self.coo_l.currentText()
@@ -246,9 +246,8 @@ class FitsView(QWidget):
 
 
     def load_coo(self):
-       #try:
-       # DUPA
-        if True:
+        try:
+        # DUPA
             check1 = False
             plik = open(self.coo_file, 'r')
             if self.fname:
@@ -354,8 +353,8 @@ class FitsView(QWidget):
             # self.coo_p.setStyleSheet("")
             # self.coo_p.repaint()      # trzeba to tu bo na mac os czasem sie nie updatuje
             for x in self.tab: x.update()
-        #except (FileNotFoundError, ValueError):
-        #    print("no coo file")
+        except (FileNotFoundError, ValueError):
+            print("no coo file")
 
     def updateHInfo(self):
 
