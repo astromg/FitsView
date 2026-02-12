@@ -9,6 +9,7 @@ import time
 
 import os,sys
 import warnings
+from itertools import cycle
 import matplotlib, numpy
 import matplotlib.patches as patches
 from astropy.io import fits
@@ -69,6 +70,15 @@ class FitsView(QWidget):
         self.special=False
 
         self.table_data = []
+
+        self.color_cycle = cycle([
+            "#1f77b4",  # blue
+            "#ff7f0e",  # orange
+            "#2ca02c",  # green
+            "#d62728",  # red
+            "#9467bd",  # purple
+            "#8c564b",  # brown
+        ])
 
     def nextFits(self):
         lista = sorted([f for f in os.listdir(self.fits_directory) if ".fits" in f])
@@ -237,7 +247,9 @@ class FitsView(QWidget):
 
     def load_coo(self):
        #try:
+       # DUPA
         if True:
+            check1 = False
             plik = open(self.coo_file, 'r')
             if self.fname:
                self.setWindowTitle(self.fname+"   "+self.coo_file.split("/")[-1])
@@ -245,10 +257,39 @@ class FitsView(QWidget):
 
             if self.coo_file.endswith((".ap",".coo",".out",".als",".lst",".raw",".tfr",".rsl")):
                 data = daophot_files_parser(self.coo_file)
+                check1 = True
 
-                self.tab.append(FitsView_catalog.Catalog(self, data))
+            else:
+                try:
+                    data = Table.read(self.coo_file, format="ascii")
+                    check1 = True
+
+                except Exception:
+                    try:
+                        data = ascii.read(self.coo_file,format="basic",guess=False,header_start=None,data_start=0)
+                        check1 = True
+                    except Exception as e:
+                        raise ValueError(f"File {self.coo_file} not readable: {e}")
+
+            if check1:
+
+                tmp = {}
+                tmp["data"] = data
+                tmp["name"] = self.coo_file
+                tmp["marker_color"] = next(self.color_cycle)
+                tmp["plot_image"] = True
+                tmp["selected_index"] = -1
+                self.table_data.append(tmp)
+
+                self.tab.append(FitsView_catalog.Catalog(self, data, data_index=len(self.table_data)-1))
                 self.tab[-1].update()
-                self.TabWindow.addTab(self.tab[-1], "data")
+                tab_index = self.TabWindow.addTab(self.tab[-1], "data")
+
+
+
+
+
+
 
 
             self.ext_x=[]
@@ -257,65 +298,61 @@ class FitsView(QWidget):
 
             i=0
 
-            if ".ap" in self.coo_file:
+            # if ".ap" in self.coo_file:
+            #
+            #     przelacznik=2
+            #     txt=""
+            #     for line in plik:
+            #      if i>2:
+            #         if przelacznik == 0:
+            #            txt=line
+            #            self.ext_x.append(float(line.split()[1])-1.)
+            #            self.ext_y.append(float(line.split()[2])-1.)
+            #            przelacznik=1
+            #         elif przelacznik == 1:
+            #            txt=txt+line
+            #            self.ext_l.append(txt)
+            #            przelacznik=2
+            #         elif przelacznik == 2:
+            #            przelacznik=0
+            #      i=i+1
 
-                przelacznik=2
-                txt=""
-                for line in plik:
-                 if i>2:
-                    if przelacznik == 0:
-                       txt=line
-                       self.ext_x.append(float(line.split()[1])-1.)
-                       self.ext_y.append(float(line.split()[2])-1.)
-                       przelacznik=1
-                    elif przelacznik == 1:
-                       txt=txt+line
-                       self.ext_l.append(txt)
-                       przelacznik=2
-                    elif przelacznik == 2:
-                       przelacznik=0
-                 i=i+1
-
-            #self.data = Table(self.hdu.data, copy=False)
-
-
-
-            elif ".raw" in self.coo_file or ".tfr" in self.coo_file or ".out" in self.coo_file or ".coo" in self.coo_file or ".als" in self.coo_file or ".lst" in self.coo_file or ".rsl" in self.coo_file:
-              for line in plik:
-                 if i>2 and len(line.split())>1:
-                    self.ext_x.append(float(line.split()[1])-1.)
-                    self.ext_y.append(float(line.split()[2])-1.)
-                    self.ext_l.append(line)
-                 i=i+1
+            # elif ".raw" in self.coo_file or ".tfr" in self.coo_file or ".out" in self.coo_file or ".coo" in self.coo_file or ".als" in self.coo_file or ".lst" in self.coo_file or ".rsl" in self.coo_file:
+            #   for line in plik:
+            #      if i>2 and len(line.split())>1:
+            #         self.ext_x.append(float(line.split()[1])-1.)
+            #         self.ext_y.append(float(line.split()[2])-1.)
+            #         self.ext_l.append(line)
+            #      i=i+1
 
 
-            elif ".cal" in self.coo_file:
-              for line in plik:
-                 if i>2 and len(line.split())>1:
-                    if "_J" in self.fname.split("/")[-1]:
-                       self.ext_x.append(float(line.split()[2])-1.)
-                       self.ext_y.append(float(line.split()[3])-1.)
-                       self.ext_l.append(line)
-                    if "_K" in self.fname.split("/")[-1]:
-                       self.ext_x.append(float(line.split()[4])-1.)
-                       self.ext_y.append(float(line.split()[5])-1.)
-                       self.ext_l.append(line)
-                 i=i+1
+            # elif ".cal" in self.coo_file:
+            #   for line in plik:
+            #      if i>2 and len(line.split())>1:
+            #         if "_J" in self.fname.split("/")[-1]:
+            #            self.ext_x.append(float(line.split()[2])-1.)
+            #            self.ext_y.append(float(line.split()[3])-1.)
+            #            self.ext_l.append(line)
+            #         if "_K" in self.fname.split("/")[-1]:
+            #            self.ext_x.append(float(line.split()[4])-1.)
+            #            self.ext_y.append(float(line.split()[5])-1.)
+            #            self.ext_l.append(line)
+            #      i=i+1
 
-            else:
-              try:
-                 for line in plik:
-                     if "#" not in line and len(line.strip())>0:
-                        self.ext_x.append(float(line.split()[int(self.cfg_xCol)]))
-                        self.ext_y.append(float(line.split()[int(self.cfg_yCol)]))
-                        self.ext_l.append(line)
-              except IndexError:
-                     self.ext_x,self.ext_y,self.ext_l=[],[],[]
-                     self.msg = QMessageBox()
-                     self.msg.setText("Wrong column definition in COO file.\nCheck configuration!")
-                     self.msg.exec_()
-            self.coo_p.setStyleSheet("")
-            self.coo_p.repaint()      # trzeba to tu bo na mac os czasem sie nie updatuje
+            # else:
+            #   try:
+            #      for line in plik:
+            #          if "#" not in line and len(line.strip())>0:
+            #             self.ext_x.append(float(line.split()[int(self.cfg_xCol)]))
+            #             self.ext_y.append(float(line.split()[int(self.cfg_yCol)]))
+            #             self.ext_l.append(line)
+            #   except IndexError:
+            #          self.ext_x,self.ext_y,self.ext_l=[],[],[]
+            #          self.msg = QMessageBox()
+            #          self.msg.setText("Wrong column definition in COO file.\nCheck configuration!")
+            #          self.msg.exec_()
+            # self.coo_p.setStyleSheet("")
+            # self.coo_p.repaint()      # trzeba to tu bo na mac os czasem sie nie updatuje
             for x in self.tab: x.update()
         #except (FileNotFoundError, ValueError):
         #    print("no coo file")
@@ -758,7 +795,7 @@ class HeaderTab(QWidget):
        grid=QGridLayout()
        grid.addWidget(self.filter_l,0,0)
        grid.addWidget(self.filter_e,0,1)
-       grid.addWidget(self.heder_e,1,0,3,2)
+       grid.addWidget(self.heder_e,1,0,1,2)
        self.setLayout(grid)
        self.update()
 
