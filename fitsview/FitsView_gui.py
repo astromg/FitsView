@@ -245,6 +245,27 @@ class FitsView(QWidget):
               self.load_coo()
 
 
+    def add_coo(self,data,name="data",color=None,plot_image=True):
+        tmp = {}
+        tmp["data"] = data
+        tmp["name"] = name
+        if color != None:
+            tmp["marker_color"] = color
+        else:
+            tmp["marker_color"] = next(self.color_cycle)
+        tmp["plot_image"] = plot_image
+
+        tmp["selected_index"] = -1
+        self.table_data.append(tmp)
+
+        self.tab.append(FitsView_catalog.Catalog(self, data, data_index=len(self.table_data) - 1))
+        self.TabWindow.addTab(self.tab[-1], "catalog")
+        self.tab[-1].update()
+
+
+        for x in self.tab:
+            x.update()
+
     def load_coo(self):
         try:
         # DUPA
@@ -271,24 +292,7 @@ class FitsView(QWidget):
                         raise ValueError(f"File {self.coo_file} not readable: {e}")
 
             if check1:
-
-                tmp = {}
-                tmp["data"] = data
-                tmp["name"] = self.coo_file
-                tmp["marker_color"] = next(self.color_cycle)
-                tmp["plot_image"] = True
-                tmp["selected_index"] = -1
-                self.table_data.append(tmp)
-
-                self.tab.append(FitsView_catalog.Catalog(self, data, data_index=len(self.table_data)-1))
-                self.tab[-1].update()
-                tab_index = self.TabWindow.addTab(self.tab[-1], "data")
-
-
-
-
-
-
+                self.add_coo(data,name=self.coo_file)
 
 
             self.ext_x=[]
@@ -352,7 +356,7 @@ class FitsView(QWidget):
             #          self.msg.exec_()
             # self.coo_p.setStyleSheet("")
             # self.coo_p.repaint()      # trzeba to tu bo na mac os czasem sie nie updatuje
-            for x in self.tab: x.update()
+
         except (FileNotFoundError, ValueError):
             print("no coo file")
 

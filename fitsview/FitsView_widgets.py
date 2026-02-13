@@ -6,6 +6,10 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 from PyQt5.QtWidgets import QMainWindow, QWidget, QLabel, QTextEdit, QLineEdit, QPushButton, \
     QGridLayout, QHBoxLayout, QVBoxLayout
 
+from astropy.table import Table
+
+from pyaraucaria.ffs import FFS
+
 class HeaderTabLocal(QWidget):
    def __init__(self,parent,header): 
        QWidget.__init__(self)
@@ -143,4 +147,103 @@ class PlotWindow(QWidget):
         else:
             self.toolbar.hide()
         QMainWindow.resizeEvent(self, event)
-          
+
+
+class FFSWindow(QWidget):
+    def __init__(self, parent, image, saturation=50000,dx=0,dy=0):
+        QWidget.__init__(self)
+        self.setWindowFlag(Qt.Tool)
+        self.parent = parent
+        self.image = image
+        self.saturation = saturation
+        self.dx=int(dx)
+        self.dy=int(dy)
+
+        self.txt = ""
+
+        self.mkUI()
+        self.initFFS()
+
+    def initFFS(self):
+        size = self.image.shape
+        txt = f'------ {size} -------'
+        self.pole_e.append(txt)
+
+        self.ffs = FFS(self.image)
+        self.ffs.saturation = self.saturation
+        self.ffs.mk_stats()
+        for k in self.ffs.stats.keys():
+            txt = f'{k}: {self.ffs.stats[k]:.2f}'
+            self.pole_e.append(txt)
+            #print(f'{k}: {ffs.stats[k]} // {ffs.stats_description[k]}')
+
+
+        #ffs.sky_gradient(n_segments=10)
+        #ffs.find_lines()
+        #ffs.star_info(box=15, N_stars=20)
+        #ffs.calc_star_stats()
+
+    def find_pushed(self):
+        th = float(self.th_e.text())
+        fwhm = float(self.fwhm_e.text())
+        box = int(2 * fwhm)
+        self.ffs.find_stars(threshold=th, fwhm=fwhm)
+        self.ffs.star_info(box=box, N_stars=None)
+
+        x = self.ffs.stats["stars"]["x"]+self.dx
+        y = self.ffs.stats["stars"]["y"]+self.dy
+        adu = self.ffs.stats["stars"]["max_adu"]
+        fwhm = self.ffs.stats["stars"]["fwhm"]
+        fwhm_x = self.ffs.stats["stars"]["fwhm_x"]
+        fwhm_y = self.ffs.stats["stars"]["fwhm_y"]
+        ellipticity = self.ffs.stats["stars"]["ellipticity"]
+        theta = self.ffs.stats["stars"]["theta"]
+        cpe = self.ffs.stats["stars"]["cpe"]
+
+        stars = Table([x,y,adu,fwhm,fwhm_x,fwhm_y,ellipticity,theta,cpe], names=["x","y","max_adu","fwhm","fwhm_x","fwhm_y","ellipticity","theta","cpe"])
+
+        self.parent.parent.add_coo(stars, name="ffs.star_info")
+
+    def mkUI(self):
+        self.setWindowTitle('FFS')
+        grid = QGridLayout()
+
+        w = 0
+        self.find_p = QPushButton('Find stars', self)
+        self.find_p.clicked.connect(self.find_pushed)
+
+        self.th_l = QLabel("Th:", self)
+        self.th_e = QLineEdit("10")
+        self.fwhm_l = QLabel("fwhm:")
+        self.fwhm_e = QLineEdit("5")
+
+        grid.addWidget(self.find_p, w, 0)
+        grid.addWidget(self.th_l, w, 1)
+        grid.addWidget(self.th_e, w, 2)
+        grid.addWidget(self.fwhm_l, w, 3)
+        grid.addWidget(self.fwhm_e, w, 4)
+
+        w = w + 1
+
+        self.pole_e = QTextEdit()
+        self.pole_e.setReadOnly(1)
+
+        grid.addWidget(self.pole_e, w, 0, 3, 5)
+
+        w = w + 3
+        self.cl_p = QPushButton('Close', self)
+        self.cl_p.clicked.connect(self.close_window)
+        grid.addWidget(self.cl_p, w, 1, 1, 2)
+
+        self.setLayout(grid)
+
+        gm = eval(self.parent.parent.cfg_geometry)
+        self.setGeometry(int(gm[1]) + int(gm[2]) + 10, int(gm[1]), 400, 500)
+
+    def update(self):
+        self.show()
+        self.pole_e.append(self.txt)
+        self.parent.activateWindow()
+
+    def close_window(self):
+        self.hide()

@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
 
-#----------------
-# 23.03.2022
-# Marek Gorski
-#----------------
-
-
 import matplotlib.pyplot as plt
 import matplotlib, numpy
 import matplotlib.patches as patches
@@ -14,18 +8,17 @@ from astropy.io import fits
 from matplotlib import cm
 from matplotlib.figure import Figure
 
-
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 
 from scipy.optimize import curve_fit
 
-from fitsview import FitsView_widgets
-
 from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QLabel,QCheckBox, QTextEdit, QMessageBox, QLineEdit, QDialog, QTabWidget, QPushButton, QFileDialog, QGridLayout, QHBoxLayout, QVBoxLayout, QInputDialog,QComboBox, QSlider
 from PyQt5 import QtCore, QtGui
- 
-        
+
+from fitsview import FitsView_widgets
+
+
 class Image(QWidget):
     def __init__(self,parent,hdu):
         QWidget.__init__(self)
@@ -43,6 +36,7 @@ class Image(QWidget):
         self.r_window=False
         self.c_window=False
         self.e_window=False
+        self.s_window=False
 
         self.optiones=False
 
@@ -194,8 +188,14 @@ class Image(QWidget):
                         size_scatter = mksize ** 2  # scatter używa pola powierzchni
 
                         if marker == "open circle":
-                            norm_val = (val - numpy.min(val)) / (numpy.max(val) - numpy.min(val))
-                            edge_colors = plt.cm.viridis(norm_val)
+
+                            mask = ~numpy.isnan(val)
+                            norm_val = numpy.zeros_like(val)
+                            norm_val[mask] = (val[mask] - numpy.min(val[mask])) / (numpy.max(val[mask]) - numpy.min(val[mask]))
+
+                            edge_colors = numpy.zeros((len(val), 4))
+                            edge_colors[mask] = plt.cm.viridis(norm_val[mask])
+
                             sc = self.axes.scatter(xs, ys, s=size_scatter, marker='o',edgecolors=edge_colors, facecolors='none')
                         else:
                             sc = self.axes.scatter(xs, ys, s=size_scatter, c=val, marker=marker, cmap='viridis')
@@ -550,46 +550,60 @@ class Image(QWidget):
 
 
         if "m" in event.key:
-          self.int_x.append(xr)
-          self.int_y.append(yr)
-          self.update()
-          counts=self.dane[int(y)][int(x)]
-          txt=str(xr)+" "+str(yr)+" "+str(counts)+" m"
-          txt2 = "marked x=%.2f y=%.2f counts=%d"%(xr,yr,counts)
-          self.text_window.txt=txt2
-          self.text_window.update()
-          print(txt)
+            self.int_x.append(xr)
+            self.int_y.append(yr)
+            self.update()
+            counts=self.dane[int(y)][int(x)]
+            txt=str(xr)+" "+str(yr)+" "+str(counts)+" m"
+            txt2 = "marked x=%.2f y=%.2f counts=%d"%(xr,yr,counts)
+            self.text_window.txt=txt2
+            self.text_window.update()
+            print(txt)
 
 
         if "s" in event.key:
-          self.int_x.append(xr)
-          self.int_y.append(yr)
-          self.update()
+            self.int_x.append(xr)
+            self.int_y.append(yr)
+            self.update()
 
 
-          x1,x2 = self.axes.get_xlim()
-          if x1<0: x1=0
-          if x2>len(self.dane[int(y),:])-1: x2=len(self.dane[int(y),:])-1
+            x1,x2 = self.axes.get_xlim()
+            if x1<0: x1=0
+            if x2>len(self.dane[int(y),:])-1: x2=len(self.dane[int(y),:])-1
 
-          y1,y2 = self.axes.get_ylim()
-          if y1<0: y1=0
-          if y2>len(self.dane[:,int(x)])-1: y2=len(self.dane[:,int(x)])-1
+            y1,y2 = self.axes.get_ylim()
+            if y1<0: y1=0
+            if y2>len(self.dane[:,int(x)])-1: y2=len(self.dane[:,int(x)])-1
 
-          dane=self.dane[int(y1):int(y2),int(x1):int(x2)]
+            image=self.dane[int(y1):int(y2),int(x1):int(x2)]
 
-          q34 = (numpy.quantile(dane, 0.83725) - numpy.quantile(dane, 0.16275))/2.
+            # DUPA
+            if not self.s_window:
+                self.s_window=FitsView_widgets.FFSWindow(self,image,dx=x1,dy=y1)
+                self.parent.active_windows.append(self.s_window)
+            else:
+                self.s_window.image = image
+                self.s_window.dx = x1
+                self.s_window.dy = y1
+                self.s_window.initFFS()
 
-          txt = "selected x=(%.2f,%.2f)  y=(%.2f,%.2f)\n"%(x1,x2,y1,y2)
-          txt = txt+"min: %.2f\n"%(dane.min())
-          txt = txt+"max: %.2f\n"%(dane.max())
-          txt = txt+"mean: %.2f\n"%(numpy.mean(dane))
-          txt = txt+"median: %.2f\n"%(numpy.median(dane))
-          txt = txt+"spread: %.2f\n"%(numpy.std(dane))
-          txt = txt + "sigma_q34: %.2f\n" % (q34)
+            self.s_window.show()
+            self.s_window.raise_()
 
-          self.text_window.txt=txt
-          self.text_window.update()
-          print(txt)
+
+          # q34 = (numpy.quantile(dane, 0.83725) - numpy.quantile(dane, 0.16275))/2.
+          #
+          # txt = "selected x=(%.2f,%.2f)  y=(%.2f,%.2f)\n"%(x1,x2,y1,y2)
+          # txt = txt+"min: %.2f\n"%(dane.min())
+          # txt = txt+"max: %.2f\n"%(dane.max())
+          # txt = txt+"mean: %.2f\n"%(numpy.mean(dane))
+          # txt = txt+"median: %.2f\n"%(numpy.median(dane))
+          # txt = txt+"spread: %.2f\n"%(numpy.std(dane))
+          # txt = txt + "sigma_q34: %.2f\n" % (q34)
+          #
+          # self.text_window.txt=txt
+          # self.text_window.update()
+          # print(txt)
 
 
 
