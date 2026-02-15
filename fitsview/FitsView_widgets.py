@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from PyQt5.QtCore import Qt
+from astropy.io.misc.asdf.tags.helpers import skycoord_equal
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
@@ -279,22 +280,35 @@ class FFSWindow(QWidget):
         fwhm = float(self.fwhm_e.text())
         box = int(2 * fwhm)
         self.ffs.find_stars(threshold=th, fwhm=fwhm)
+        self.ffs.calc_frame_fwhm(threshold=th, fwhm=fwhm, box=box, N_stars=20)
         self.ffs.star_info(box=box, N_stars=None)
 
-        x = self.ffs.stats["stars"]["x"]+self.dx
-        y = self.ffs.stats["stars"]["y"]+self.dy
-        adu = self.ffs.stats["stars"]["max_adu"]
-        box_mag = self.ffs.stats["stars"]["box_mag"]
-        fwhm = self.ffs.stats["stars"]["fwhm"]
-        fwhm_x = self.ffs.stats["stars"]["fwhm_x"]
-        fwhm_y = self.ffs.stats["stars"]["fwhm_y"]
-        ellipticity = self.ffs.stats["stars"]["ellipticity"]
-        theta = self.ffs.stats["stars"]["theta"]
-        cpe = self.ffs.stats["stars"]["cpe"]
-
-        stars = Table([x,y,adu,box_mag,fwhm,fwhm_x,fwhm_y,ellipticity,theta,cpe], names=["x","y","max_adu","box_mag","fwhm","fwhm_x","fwhm_y","ellipticity","theta","cpe"])
+        stars = self.ffs.stars
+        stars["x"] = stars["x"] + self.dx
+        stars["y"] = stars["y"] + self.dy
 
         self.parent.parent.add_coo(stars, name="ffs.star_info")
+
+        txt = f'{"frame_fwhm"}: {self.ffs.stats["frame_fwhm"]:.2f}'
+        self.pole_e.append(txt)
+        txt = f'{"frame_ellipticity"}: {self.ffs.stats["frame_ellipticity"]:.2f}'
+        self.pole_e.append(txt)
+        txt = f'{"frame_cpe"}: {self.ffs.stats["frame_cpe"]:.2f}'
+        self.pole_e.append(txt)
+
+    def calc_gradient(self):
+        n = int(self.segments_e.text())
+        self.ffs.sky_gradient(n_segments=n)
+        txt = f'{"sky max amplitude"}: {self.ffs.stats["bkg_max_amplitude"]:.2f}'
+        self.pole_e.append(txt)
+        txt = f'{"sky frame gradient"}: {self.ffs.stats["bkg_frame_gradient"]:.2f}'
+        self.pole_e.append(txt)
+
+        sky = self.ffs.sky
+        sky["sky_surface_x"] = sky["sky_surface_x"] + self.dx
+        sky["sky_surface_y"] = sky["sky_surface_y"] + self.dy
+        self.parent.parent.add_coo(sky, name="ffs.sky")
+
 
     def mkUI(self):
         self.setWindowTitle('FFS')
@@ -314,6 +328,18 @@ class FFSWindow(QWidget):
         grid.addWidget(self.th_e, w, 2)
         grid.addWidget(self.fwhm_l, w, 3)
         grid.addWidget(self.fwhm_e, w, 4)
+
+        w = w + 1
+
+        self.gradient_p = QPushButton("Check sky:", self)
+        self.gradient_p.clicked.connect(self.calc_gradient)
+
+        self.segments_l = QLabel("Segments:", self)
+        self.segments_e = QLineEdit("10")
+
+        grid.addWidget(self.gradient_p, w, 0)
+        grid.addWidget(self.segments_l, w, 1)
+        grid.addWidget(self.segments_e, w, 2)
 
         w = w + 1
 
