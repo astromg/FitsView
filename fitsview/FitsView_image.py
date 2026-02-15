@@ -575,7 +575,7 @@ class Image(QWidget):
             if y1<0: y1=0
             if y2>len(self.dane[:,int(x)])-1: y2=len(self.dane[:,int(x)])-1
 
-            image=self.dane[int(y1):int(y2),int(x1):int(x2)]
+            image=numpy.transpose(self.dane[int(y1):int(y2),int(x1):int(x2)])
 
             # DUPA
             if not self.s_window:
