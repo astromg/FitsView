@@ -4,7 +4,7 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from PyQt5.QtWidgets import QMainWindow, QWidget, QLabel, QTextEdit, QLineEdit, QPushButton, \
-    QGridLayout, QHBoxLayout, QVBoxLayout
+    QGridLayout, QHBoxLayout, QVBoxLayout, QComboBox
 
 from astropy.table import Table
 
@@ -149,6 +149,97 @@ class PlotWindow(QWidget):
         QMainWindow.resizeEvent(self, event)
 
 
+class FigureWindow(QWidget):
+    def __init__(self,parent):
+        QWidget.__init__(self)
+        self.setWindowFlag(Qt.Tool)
+        self.parent=parent
+        self.txt = ""
+        self.mkUI()
+        self.update()
+
+        self.xcol_s.currentTextChanged.connect(self.update)
+        self.ycol_s.currentTextChanged.connect(self.update)
+
+
+    def mkUI(self):
+
+        self.xcol_l = QLabel("X: ")
+        self.xcol_s = QComboBox()
+
+        self.ycol_l = QLabel("Y: ")
+        self.ycol_s = QComboBox()
+
+        keys = self.parent.data.keys()
+        self.xcol_s.addItems(keys)
+        self.ycol_s.addItems(keys)
+        self.xcol_s.setCurrentIndex(len(keys)-2)
+        self.ycol_s.setCurrentIndex(len(keys)-1)
+
+        self.fig = Figure(figsize=(2, 2), linewidth=-1, dpi=100,tight_layout=True, frameon=True)
+        self.canvas = FigureCanvas(self.fig)
+        self.axes = self.fig.add_subplot(111)
+        self.toolbar = NavigationToolbar(self.canvas, self)
+        self.toolbar.hide()
+
+        self.pole= QLineEdit()
+        self.pole.setReadOnly(1)
+
+        self.cl =  QPushButton('Close', self)
+        self.cl.clicked.connect(self.close_window)
+
+        self.setWindowTitle('Figure')
+        grid = QGridLayout()
+
+        w = 0
+        grid.addWidget(self.ycol_l,w,0)
+        grid.addWidget(self.ycol_s,w,1)
+        grid.addWidget(self.xcol_l,w,2)
+        grid.addWidget(self.xcol_s,w,3)
+        w = w + 1
+        grid.addWidget(self.canvas,w,0,3,4)
+        w = w + 3
+        grid.addWidget(self.toolbar,w,0,1,4)
+        w = w + 1
+        grid.addWidget(self.pole,w,0,1,4)
+        w = w + 1
+        grid.addWidget(self.cl,w,3,1,1)
+
+        self.setLayout(grid)
+
+        self.show()
+        gm=eval(self.parent.parent.cfg_geometry)
+        self.setGeometry(int(gm[1])+int(gm[2])+10,int(gm[1]+200),500,400)
+
+    def update(self):
+
+        self.axes.clear()
+
+        self.axes.set_xlabel(self.xcol_s.currentText())
+        self.axes.set_ylabel(self.ycol_s.currentText())
+
+        x = self.parent.data[self.xcol_s.currentText()]
+        y = self.parent.data[self.ycol_s.currentText()]
+
+        self.axes.plot(x,y,".b")
+
+        self.canvas.draw()
+
+        self.show()
+        #self.pole.setText(self.txt)
+        self.parent.activateWindow()
+
+    def close_window(self):
+        self.close()
+        self.parent.update()
+
+    def resizeEvent(self, event):
+        if float(self.frameGeometry().width()) > 700 and float(self.frameGeometry().height()) > 500:
+            self.toolbar.show()
+        else:
+            self.toolbar.hide()
+        QMainWindow.resizeEvent(self, event)
+
 class FFSWindow(QWidget):
     def __init__(self, parent, image, saturation=50000,dx=0,dy=0):
         QWidget.__init__(self)
@@ -193,6 +284,7 @@ class FFSWindow(QWidget):
         x = self.ffs.stats["stars"]["x"]+self.dx
         y = self.ffs.stats["stars"]["y"]+self.dy
         adu = self.ffs.stats["stars"]["max_adu"]
+        box_mag = self.ffs.stats["stars"]["box_mag"]
         fwhm = self.ffs.stats["stars"]["fwhm"]
         fwhm_x = self.ffs.stats["stars"]["fwhm_x"]
         fwhm_y = self.ffs.stats["stars"]["fwhm_y"]
@@ -200,7 +292,7 @@ class FFSWindow(QWidget):
         theta = self.ffs.stats["stars"]["theta"]
         cpe = self.ffs.stats["stars"]["cpe"]
 
-        stars = Table([x,y,adu,fwhm,fwhm_x,fwhm_y,ellipticity,theta,cpe], names=["x","y","max_adu","fwhm","fwhm_x","fwhm_y","ellipticity","theta","cpe"])
+        stars = Table([x,y,adu,box_mag,fwhm,fwhm_x,fwhm_y,ellipticity,theta,cpe], names=["x","y","max_adu","box_mag","fwhm","fwhm_x","fwhm_y","ellipticity","theta","cpe"])
 
         self.parent.parent.add_coo(stars, name="ffs.star_info")
 

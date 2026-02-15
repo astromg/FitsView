@@ -24,6 +24,9 @@ class Catalog(QWidget):
     def __init__(self,parent,data,data_index=None):
         QWidget.__init__(self)
 
+
+        self.f_window = None
+
         self.parent = parent
         self.data_index = data_index
         self.data = data
@@ -125,6 +128,10 @@ class Catalog(QWidget):
                 tab.update_points()
 
 
+    def plot_figure(self):
+        if not self.f_window:
+            self.f_window = FitsView_widgets.FigureWindow(self)
+            #self.parent.active_windows.append(self.e_window)
 
     def mkUI(self):
         self.data_t = QTableView(self)
@@ -134,9 +141,12 @@ class Catalog(QWidget):
 
         self.data_t.clicked.connect(self.on_row_clicked)
 
-        self.plot_l = QLabel("Plot Points")
+        #self.plot_l = QLabel("Plot Points")
         self.plot_c = QCheckBox("Plot on Image")
         self.plot_c.setChecked(True)
+
+        self.plotFigure_p = QPushButton("Plot Figure")
+        self.plotFigure_p.clicked.connect(self.plot_figure)
 
         self.x_l = QLabel("X: ")
         self.y_l = QLabel("Y: ")
@@ -160,8 +170,9 @@ class Catalog(QWidget):
 
         grid= QGridLayout()
         w=0
-        grid.addWidget(self.plot_l, w, 0)
+        #grid.addWidget(self.plot_l, w, 0)
         grid.addWidget(self.plot_c, w, 1)
+        grid.addWidget(self.plotFigure_p, w, 3)
         w = w + 1
         grid.addWidget(self.x_l, w, 0)
         grid.addWidget(self.xcol_s, w, 1)
