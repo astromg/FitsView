@@ -7,6 +7,8 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 from PyQt5.QtWidgets import QMainWindow, QWidget, QLabel, QTextEdit, QLineEdit, QPushButton, \
     QGridLayout, QHBoxLayout, QVBoxLayout, QComboBox
 
+import numpy as np
+
 from astropy.table import Table
 
 from pyaraucaria.ffs import FFS
@@ -262,7 +264,7 @@ class FFSWindow(QWidget):
         self.pole_e.append(txt)
 
         self.ffs = FFS(self.image)
-        self.ffs.saturation = self.saturation
+        self.ffs.saturation = float(self.saturation_e.text())
         self.ffs.mk_stats()
         for k in self.ffs.stats.keys():
             txt = f'{k}: {self.ffs.stats[k]:.2f}'
@@ -279,6 +281,7 @@ class FFSWindow(QWidget):
         th = float(self.th_e.text())
         fwhm = float(self.fwhm_e.text())
         box = int(2 * fwhm)
+        self.ffs.saturation = float(self.saturation_e.text())
         self.ffs.find_stars(threshold=th, fwhm=fwhm)
         self.ffs.calc_frame_fwhm(threshold=th, fwhm=fwhm, box=box, N_stars=20)
         self.ffs.star_info(box=box, N_stars=None)
@@ -297,6 +300,7 @@ class FFSWindow(QWidget):
         self.pole_e.append(txt)
 
     def calc_gradient(self):
+        self.ffs.saturation = float(self.saturation_e.text())
         n = int(self.segments_e.text())
         self.ffs.sky_gradient(n_segments=n)
         txt = f'{"sky max amplitude"}: {self.ffs.stats["bkg_max_amplitude"]:.2f}'
@@ -309,12 +313,55 @@ class FFSWindow(QWidget):
         sky["sky_surface_y"] = sky["sky_surface_y"] + self.dy
         self.parent.parent.add_coo(sky, name="ffs.sky")
 
+    def find_lines(self):
+        self.ffs.find_lines()
+
+        r = self.ffs.stats["lines"]["rho"][0]
+        t = self.ffs.stats["lines"]["theta"][0]
+
+        x_val = np.arange(self.image.shape[0])
+        y_val = self.hough_to_xy(r,t,x_val)
+
+        y_idx = np.round(y_val).astype(int)
+        line_mask = np.zeros_like(self.ffs.maska, dtype=bool)
+        valid = (y_idx >= 0) & (y_idx < max(y_val))
+        line_mask[y_idx[valid], x_val[valid]] = True
+
+        maska = self.ffs.maska & line_mask
+
+        self.parent.parent.mask_list.append(maska)
+
+        self.parent.parent.update_tabs()
+
+
+    def hough_to_xy(self, rho, theta, x):
+
+        x_vals = np.array(x)
+
+        cos_t = np.cos(theta)
+        sin_t = np.sin(theta)
+
+        # if line is not vertical
+        if abs(sin_t) > 1e-8:
+            y = (rho - x_vals * cos_t) / sin_t
+
+        return(y)
+
 
     def mkUI(self):
         self.setWindowTitle('FFS')
         grid = QGridLayout()
 
         w = 0
+
+        self.saturation_l = QLabel("saturation:")
+        self.saturation_e = QLineEdit("50000")
+
+        grid.addWidget(self.saturation_l, w, 0)
+        grid.addWidget(self.saturation_e, w, 1)
+
+        w = w + 1
+
         self.find_p = QPushButton('Find stars', self)
         self.find_p.clicked.connect(self.find_pushed)
 
@@ -340,6 +387,14 @@ class FFSWindow(QWidget):
         grid.addWidget(self.gradient_p, w, 0)
         grid.addWidget(self.segments_l, w, 1)
         grid.addWidget(self.segments_e, w, 2)
+
+        w = w + 1
+
+        self.lines_p = QPushButton("Find Lines:", self)
+        self.lines_p.clicked.connect(self.find_lines)
+
+        grid.addWidget(self.lines_p, w, 0)
+
 
         w = w + 1
 

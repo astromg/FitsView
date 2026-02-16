@@ -71,6 +71,8 @@ class FitsView(QWidget):
 
         self.table_data = []
 
+        self.mask_list = []
+
         self.color_cycle = cycle([
             "#1f77b4",  # blue
             "#ff7f0e",  # orange
@@ -245,6 +247,10 @@ class FitsView(QWidget):
               self.load_coo()
 
 
+    def update_tabs(self):
+        for x in self.tab:
+            x.update()
+
     def add_coo(self,data,name="data",color=None,plot_image=True):
         tmp = {}
         tmp["data"] = data
@@ -262,12 +268,12 @@ class FitsView(QWidget):
         self.TabWindow.addTab(self.tab[-1], "catalog")
         self.tab[-1].update()
 
+        self.update_tabs()
 
-        for x in self.tab:
-            x.update()
 
     def load_coo(self):
-        try:
+        #try:
+        if True:
         # DUPA
             check1 = False
             plik = open(self.coo_file, 'r')
@@ -275,7 +281,7 @@ class FitsView(QWidget):
                self.setWindowTitle(self.fname+"   "+self.coo_file.split("/")[-1])
 
 
-            if self.coo_file.endswith((".ap",".coo",".out",".als",".lst",".raw",".tfr",".rsl")):
+            if self.coo_file.endswith((".ap",".coo",".out",".als",".lst")):
                 data = daophot_files_parser(self.coo_file)
                 check1 = True
 
@@ -357,8 +363,8 @@ class FitsView(QWidget):
             # self.coo_p.setStyleSheet("")
             # self.coo_p.repaint()      # trzeba to tu bo na mac os czasem sie nie updatuje
 
-        except (FileNotFoundError, ValueError):
-            print("no coo file")
+        #except (FileNotFoundError, ValueError):
+        #    print("no coo file")
 
     def updateHInfo(self):
 

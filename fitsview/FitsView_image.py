@@ -3,6 +3,7 @@
 import matplotlib.pyplot as plt
 import matplotlib, numpy
 import matplotlib.patches as patches
+import numpy as np
 from astropy.io import fits
 
 from matplotlib import cm
@@ -134,12 +135,32 @@ class Image(QWidget):
             self.auto_p.hide()
             self.optiones=True
 
+
+    def update_mask(self):
+        for mk in self.parent.mask_list:
+            mask_float = mk.astype(float)
+            mask_float = np.transpose(mask_float)
+            self.axes.contour(mask_float,levels=[0.5],colors='red',linewidths=1.5)
+        self.canvas.draw_idle()
+
+
     def update_points(self):
         #DUPA
-        for obj in self.points_set:
-            obj.remove()
-        self.points_set = []
+        # for obj in self.points_set:
+        #     obj.remove()
+        # self.points_set = []
 
+        for line in list(self.axes.lines):
+            try:
+                line.remove()
+            except Exception:
+                pass
+
+        for coll in list(self.axes.collections):
+            try:
+                coll.remove()
+            except Exception:
+                pass
 
         for zestaw in self.parent.table_data:
 
@@ -207,7 +228,7 @@ class Image(QWidget):
                         selection = self.axes.plot(xs[n],ys[n],marker="o",markersize=mksize+5,color="r",mfc='none',linestyle='None')
                         self.points_set.append(selection[0])
 
-        self.canvas.draw()
+        self.canvas.draw_idle()
 
     def update(self):
 
@@ -304,6 +325,7 @@ class Image(QWidget):
         self.reset_viewfinder()
 
         self.update_points()
+        self.update_mask()
 
     def reset_viewfinder(self):
 

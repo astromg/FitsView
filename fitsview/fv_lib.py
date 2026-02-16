@@ -2,6 +2,7 @@
 from astropy.table import Table
 import numpy as np
 
+
 def daophot_files_parser(file_name):
     if file_name.endswith(".ap"):
 
@@ -50,6 +51,27 @@ def daophot_files_parser(file_name):
                 "sharp": np.array(dane[4], dtype=float),
                 "round": np.array(dane[5], dtype=float),
                 "param": np.array(dane[6], dtype=float),
+            }
+
+
+    elif file_name.endswith(".als") or file_name.endswith(".out"):
+        with open(file_name) as f:
+            lines = [l.rstrip() for l in f if l.strip()]
+            dane = []
+            data_lines = lines[2:]  # wywalam naglowek
+            for l in data_lines:
+                dane.append(l.split())
+            dane = list(zip(*dane))
+            cols = {
+                "id": np.array(dane[0], dtype=int),
+                "x": np.array(dane[1], dtype=float) - 1.0,
+                "y": np.array(dane[2], dtype=float) - 1.0,
+                "mag": np.array(dane[3], dtype=float),
+                "mag_err": np.array(dane[4], dtype=float),
+                "sky": np.array(dane[5], dtype=float),
+                "niter": np.array(dane[6], dtype=float),
+                "sharp": np.array(dane[7], dtype=float),
+                "chi": np.array(dane[8], dtype=float),
             }
 
     elif file_name.endswith(".lst"):
