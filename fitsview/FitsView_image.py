@@ -962,6 +962,7 @@ class Image(QWidget):
 
           xx=numpy.arange(0,d.max(),0.01)
           yy=self.gaus(xx,popt[0],popt[1],popt[2])
+          amplitude = popt[0]
           sky = popt[2]
           sigma=(popt[1]**2)**0.5
           fwhm=2.355*sigma
@@ -972,7 +973,7 @@ class Image(QWidget):
           self.r_window.axes.plot(xx,yy)
           self.r_window.canvas.draw()
           txt2="%.2f %.2f  %.2f r  "%(xr,yr,fwhm)
-          txt="centered x=%.2f y=%.2f FWHM= %.2f   "%(xr,yr,fwhm)
+          txt="centered x=%.2f y=%.2f amp=%.1f sky=%.1f FWHM=%.2f   "%(xr,yr,amplitude, sky,fwhm)
           self.int_x.append(xr)
           self.int_y.append(yr)
           self.update()
