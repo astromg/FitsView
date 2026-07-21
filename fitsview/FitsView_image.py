@@ -552,6 +552,18 @@ class Image(QWidget):
        self.hdrl_window=FitsView_widgets.HeaderTabLocal(self,self.hdr)
        self.parent.active_windows.append(self.hdrl_window)
 
+    def get_local_stamp(self,xr,yr,r):
+       # clamp to array bounds instead of letting negative/overflowing slice
+       # indices wrap around to the opposite edge of the array, which was
+       # silently pulling in wrong pixels for anything measured near the
+       # frame border (background, counts, zero-point, radial profile)
+       ny,nx = self.dane.shape
+       xlo,xhi = max(0,int(xr)-r), min(nx,int(xr)+r)
+       ylo,yhi = max(0,int(yr)-r), min(ny,int(yr)+r)
+       dane = self.dane[ylo:yhi,xlo:xhi]
+       x0 = xr-xlo
+       y0 = yr-ylo
+       return dane,x0,y0
 
 
     def keypressed(self,event):
@@ -688,9 +700,7 @@ class Image(QWidget):
 
         if "b" in event.key:
           r=int(self.parent.cfg_apersize)
-          dane = self.dane[int(yr)-r:int(yr)+r,int(xr)-r:int(xr)+r]
-          x0=(len(dane[0])/2.)
-          y0=(len(dane)/2.)
+          dane,x0,y0 = self.get_local_stamp(xr,yr,r)
           XX,YY = numpy.meshgrid(numpy.arange(dane.shape[1]),numpy.arange(dane.shape[0]))
           tmp = numpy.vstack((dane.ravel(),XX.ravel(),YY.ravel()))
           c,xx,yy=tmp[0],tmp[1],tmp[2]
@@ -711,9 +721,7 @@ class Image(QWidget):
 
         if "q" in event.key:
           r=int(self.parent.cfg_apersize)
-          dane = self.dane[int(yr)-r:int(yr)+r,int(xr)-r:int(xr)+r]
-          x0=(len(dane[0])/2.)
-          y0=(len(dane)/2.)
+          dane,x0,y0 = self.get_local_stamp(xr,yr,r)
           XX,YY = numpy.meshgrid(numpy.arange(dane.shape[1]),numpy.arange(dane.shape[0]))
           tmp = numpy.vstack((dane.ravel(),XX.ravel(),YY.ravel()))
           c,xx,yy=tmp[0],tmp[1],tmp[2]
@@ -733,9 +741,7 @@ class Image(QWidget):
 
         if "z" in event.key:
           r=int(self.parent.cfg_apersize)
-          dane = self.dane[int(yr)-r:int(yr)+r,int(xr)-r:int(xr)+r]
-          x1=(len(dane[0])/2.)
-          y1=(len(dane)/2.)
+          dane,x1,y1 = self.get_local_stamp(xr,yr,r)
           XX,YY = numpy.meshgrid(numpy.arange(dane.shape[1]),numpy.arange(dane.shape[0]))
           tmp = numpy.vstack((dane.ravel(),XX.ravel(),YY.ravel()))
           c,xx,yy=tmp[0],tmp[1],tmp[2]
@@ -745,7 +751,7 @@ class Image(QWidget):
           xr=xr+(x0-x1)
           yr=yr+(y0-y1)
 
-          dane = self.dane[int(yr)-r:int(yr)+r,int(xr)-r:int(xr)+r]
+          dane,_,_ = self.get_local_stamp(xr,yr,r)
           XX,YY = numpy.meshgrid(numpy.arange(dane.shape[1]),numpy.arange(dane.shape[0]))
           tmp = numpy.vstack((dane.ravel(),XX.ravel(),YY.ravel()))
           c,xx,yy=tmp[0],tmp[1],tmp[2]
@@ -880,11 +886,7 @@ class Image(QWidget):
 
           r=int((2*int(self.parent.cfg_apersize)+15)/2.)
 
-          dane = self.dane[int(yr)-r:int(yr)+r,int(xr)-r:int(xr)+r]
-          x1=(len(dane[0])/2.)
-          y1=(len(dane)/2.)
-
-
+          dane,x1,y1 = self.get_local_stamp(xr,yr,r)
 
           XX,YY = numpy.meshgrid(numpy.arange(dane.shape[1]),numpy.arange(dane.shape[0]))
           tmp = numpy.vstack((dane.ravel(),XX.ravel(),YY.ravel()))
@@ -923,9 +925,7 @@ class Image(QWidget):
 
           r=int(self.parent.cfg_apersize)
 
-          dane = self.dane[int(yr)-r:int(yr)+r,int(xr)-r:int(xr)+r]
-          x1=(len(dane[0])/2.)
-          y1=(len(dane)/2.)
+          dane,x1,y1 = self.get_local_stamp(xr,yr,r)
 
           xy = numpy.unravel_index(dane.argmax(), dane.shape)
           dx=x1-xy[1]
@@ -933,9 +933,7 @@ class Image(QWidget):
           xr=int(xr)-dx
           yr=int(yr)-dy
 
-          dane = self.dane[int(yr)-r:int(yr)+r,int(xr)-r:int(xr)+r]
-          x1=(len(dane[0])/2.)
-          y1=(len(dane)/2.)
+          dane,x1,y1 = self.get_local_stamp(xr,yr,r)
 
           XX,YY = numpy.meshgrid(numpy.arange(dane.shape[1]),numpy.arange(dane.shape[0]))
           tmp = numpy.vstack((dane.ravel(),XX.ravel(),YY.ravel()))
