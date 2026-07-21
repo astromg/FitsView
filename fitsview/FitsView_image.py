@@ -729,9 +729,15 @@ class Image(QWidget):
           mk=d<r
           aper = c[mk]
           zliczenia = aper.sum() - len(aper) * float(self.parent.cfg_bcg)
-          mag = -2.5*numpy.log10(zliczenia) + float(self.parent.cfg_zp)
-          txt2="%.1f %.1f %d %.2f q "%(xr,yr,zliczenia,mag)
-          txt="centered x=%.1f y=%.1f : counts=%d m=%.2f  "%(xr,yr,zliczenia,mag)
+
+          if zliczenia>0:
+             mag = -2.5*numpy.log10(zliczenia) + float(self.parent.cfg_zp)
+             txt2="%.1f %.1f %d %.2f q "%(xr,yr,zliczenia,mag)
+             txt="centered x=%.1f y=%.1f : counts=%d m=%.2f  "%(xr,yr,zliczenia,mag)
+          else:
+             txt2="%.1f %.1f %d nan q "%(xr,yr,zliczenia)
+             txt="centered x=%.1f y=%.1f : counts=%d  (non-positive net counts, magnitude undefined)"%(xr,yr,zliczenia)
+
           self.int_x.append(xr)
           self.int_y.append(yr)
           self.update()
@@ -760,25 +766,31 @@ class Image(QWidget):
           aper = c[mk]
           zliczenia = aper.sum() - len(aper) * float(self.parent.cfg_bcg)
 
-          mag = -2.5*numpy.log10(zliczenia) + float(self.parent.cfg_zp)
-
-          m_std, ok = QInputDialog.getText(self, 'Zero point', 'Enter star magnitude:')
-          if ok:
-             try: m_std=float(m_std)
-             except ValueError: ok=False
-
-          if ok:
-             d=m_std-mag
-             self.parent.cfg_zp=str(float(self.parent.cfg_zp)+d)
-             txt2="%.3f z"%(float(self.parent.cfg_zp))
-             txt="zero point set to %.3f"%(float(self.parent.cfg_zp))
-
-             self.int_x.append(xr)
-             self.int_y.append(yr)
-             self.update()
+          if zliczenia<=0:
+             txt="cannot set zero point: non-positive net counts (%d) in aperture - check background level"%(zliczenia)
              self.text_window.txt=txt
              self.text_window.update()
-             print(txt2)
+             print(txt)
+          else:
+             mag = -2.5*numpy.log10(zliczenia) + float(self.parent.cfg_zp)
+
+             m_std, ok = QInputDialog.getText(self, 'Zero point', 'Enter star magnitude:')
+             if ok:
+                try: m_std=float(m_std)
+                except ValueError: ok=False
+
+             if ok:
+                d=m_std-mag
+                self.parent.cfg_zp=str(float(self.parent.cfg_zp)+d)
+                txt2="%.3f z"%(float(self.parent.cfg_zp))
+                txt="zero point set to %.3f"%(float(self.parent.cfg_zp))
+
+                self.int_x.append(xr)
+                self.int_y.append(yr)
+                self.update()
+                self.text_window.txt=txt
+                self.text_window.update()
+                print(txt2)
 
         if "g" in event.key:
           xy, ok = QInputDialog.getText(self, 'Go To', 'Enter X Y:')
