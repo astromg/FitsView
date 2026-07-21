@@ -175,7 +175,7 @@ class Image(QWidget):
 
                     if self.parent.cfg_rot90:
                         xs = y
-                        ys = float(len(dane))-numpy.array(self.x)
+                        ys = float(len(self.dane[0]))-numpy.array(x)
                     else:
                         xs = x
                         ys = y
