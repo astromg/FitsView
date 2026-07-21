@@ -762,39 +762,48 @@ class Image(QWidget):
 
           mag = -2.5*numpy.log10(zliczenia) + float(self.parent.cfg_zp)
 
-          m_std=mag
           m_std, ok = QInputDialog.getText(self, 'Zero point', 'Enter star magnitude:')
-          d=float(m_std)-mag
-          self.parent.cfg_zp=str(float(self.parent.cfg_zp)+d)
-          txt2="%.3f z"%(float(self.parent.cfg_zp))
-          txt="zero point set to %.3f"%(float(self.parent.cfg_zp))
+          if ok:
+             try: m_std=float(m_std)
+             except ValueError: ok=False
 
-          self.int_x.append(xr)
-          self.int_y.append(yr)
-          self.update()
-          self.text_window.txt=txt
-          self.text_window.update()
-          print(txt2)
+          if ok:
+             d=m_std-mag
+             self.parent.cfg_zp=str(float(self.parent.cfg_zp)+d)
+             txt2="%.3f z"%(float(self.parent.cfg_zp))
+             txt="zero point set to %.3f"%(float(self.parent.cfg_zp))
+
+             self.int_x.append(xr)
+             self.int_y.append(yr)
+             self.update()
+             self.text_window.txt=txt
+             self.text_window.update()
+             print(txt2)
 
         if "g" in event.key:
           xy, ok = QInputDialog.getText(self, 'Go To', 'Enter X Y:')
-          if "," in xy: x,y = float(str(xy).split(",")[0]),float(str(xy).split(",")[1])
-          else: x,y = float(str(xy).split()[0]),float(str(xy).split()[1])
-          xr,yr=x,y
-          if self.parent.cfg_rot90:
-             xr=y
-             yr=len(self.dane)-x
-          self.x = xr
-          self.y = yr
-          self.zmiana_zoom()
-          self.int_x.append(xr)
-          self.int_y.append(yr)
-          self.update()
-          txt2=str(x)+" "+str(y)+" g"
-          txt="Marked x=%.1f y=%.1f"%(x,y)
-          self.text_window.txt=txt
-          self.text_window.update()
-          print(txt2)
+          if ok:
+             try:
+                if "," in xy: x,y = float(str(xy).split(",")[0]),float(str(xy).split(",")[1])
+                else: x,y = float(str(xy).split()[0]),float(str(xy).split()[1])
+             except (ValueError,IndexError): ok=False
+
+          if ok:
+             xr,yr=x,y
+             if self.parent.cfg_rot90:
+                xr=y
+                yr=len(self.dane)-x
+             self.x = xr
+             self.y = yr
+             self.zmiana_zoom()
+             self.int_x.append(xr)
+             self.int_y.append(yr)
+             self.update()
+             txt2=str(x)+" "+str(y)+" g"
+             txt="Marked x=%.1f y=%.1f"%(x,y)
+             self.text_window.txt=txt
+             self.text_window.update()
+             print(txt2)
 
 
         if "l" in event.key:
