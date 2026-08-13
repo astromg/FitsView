@@ -21,7 +21,7 @@ from fitsview import FitsView_widgets
 
 
 class Image(QWidget):
-    def __init__(self,parent,hdu):
+    def __init__(self,parent,hdu,plane=None):
         QWidget.__init__(self)
 
 
@@ -30,7 +30,10 @@ class Image(QWidget):
         self.int_x=[]
         self.int_y=[]
         self.parent=parent
-        self.dane = numpy.nan_to_num(hdu.data, nan=0)
+        self.plane=plane                    # numer plaszczyzny dla danych 3D, None dla zwyklego obrazka
+        if plane is None: dane=hdu.data
+        else: dane=hdu.data[plane]
+        self.dane = numpy.nan_to_num(dane, nan=0)
         self.hdr=hdu.header
 
         self.text_window=False

@@ -484,6 +484,11 @@ class FitsView(QWidget):
        self.msg.setText(txt)
        self.msg.exec_()
 
+    def planeName(self,p):                # nazwa zakladki dla plaszczyzny danych 3D
+       if p is None: return "IMAGE"
+       try: return str(self.cfg_cube_planes[p]).strip()
+       except: return "IMAGE %d"%p
+
     def updateUI(self):
 
        # ToDo wypluwac jakies informacje o samym fits
@@ -508,10 +513,17 @@ class FitsView(QWidget):
                 OK=True
              except: OK=False
              if OK:
-                self.tab.append(FitsView_image.Image(self,self.hdu[n]))
-                self.tab[-1].update()
-                self.TabWindow.insertTab(i,self.tab[-1],"IMAGE")
-                i=i+1
+                dane=self.hdu[n].data
+                if dane.ndim == 2: plany=[None]
+                elif dane.ndim == 3: plany=list(range(len(dane)))
+                else:
+                   plany=[]
+                   self.errmssg("HDU %d: %dD data %s\nis not an image"%(n,dane.ndim,str(dane.shape)))
+                for p in plany:
+                   self.tab.append(FitsView_image.Image(self,self.hdu[n],p))
+                   self.tab[-1].update()
+                   self.TabWindow.insertTab(i,self.tab[-1],self.planeName(p))
+                   i=i+1
           elif self.hdu[n].name == 'CATALOG':
 
               data = Table(self.hdu[n].data, copy=False)
@@ -770,6 +782,16 @@ class FitsView(QWidget):
            if tmp in x:
               wartosc=x.split("=")[1]
        self.cfg_hdr_keywords=eval(wartosc)   # TUTAJ
+
+       tmp="cube_planes"                                     # TUTAJ
+       wartosc="()"                                         # TUTAJ
+       for l in cfg_file:
+           if tmp in l:
+              wartosc=l.split("=")[1]
+       for x in self.args:
+           if tmp in x:
+              wartosc=x.split("=")[1]
+       self.cfg_cube_planes=eval(str(wartosc))   # TUTAJ
 
        tmp="save_chx"                                     # TUTAJ
        wartosc="(False,False,False)"                                         # TUTAJ
@@ -1038,6 +1060,7 @@ class Settings(QWidget):   # DEFINCE CONFIG
        self.parent.cfg_save_chx=(chx1,chx2,chx3)
        txt=txt+"save_chx="+str(self.parent.cfg_save_chx)+"\n"
        txt=txt+"hdr_keywords="+str(self.parent.cfg_hdr_keywords)+"\n"
+       txt=txt+"cube_planes="+str(self.parent.cfg_cube_planes)+"\n"
 
 
        cfg_file.write(txt)
