@@ -24,7 +24,7 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QMessageBox, QLabel,QCheckBox, QComboBox, QTextEdit, QLineEdit, QDialog, QTabWidget, QPushButton, QFileDialog, QGridLayout, QHBoxLayout, QVBoxLayout, QMessageBox
 from PyQt5 import QtCore, QtGui
 
-from fitsview import FitsView_image, FitsView_catalog
+from fitsview import FitsView_image, FitsView_catalog, FitsView_maps
 from fitsview.fv_lib import daophot_files_parser
 
 warnings.simplefilter('ignore', category=AstropyWarning)
@@ -70,8 +70,8 @@ class FitsView(QWidget):
         self.special=False
 
         self.table_data = []
-
-        self.mask_list = []
+        self.map_data = []       # mapy (np. z FFS), kazda z wlasna zakladka MapTab
+        self.mask_data = []      # maski (np. z FFS), zakladki MaskTab, rysowane na Image
 
         self.color_cycle = cycle([
             "#1f77b4",  # blue
@@ -116,6 +116,9 @@ class FitsView(QWidget):
           self.ext_x=[]
           self.ext_y=[]
           self.ext_l=[]
+
+          self.map_data=[]       # mapy i maski naleza do poprzedniej klatki
+          self.mask_data=[]
 
 
           self.getFits()
@@ -178,6 +181,9 @@ class FitsView(QWidget):
 
        self.hinfo_e=QTextEdit()
        self.hinfo_e.setReadOnly(True)
+       # 3 linie naglowka (updateHInfo); wczesniej pole zachodzilo na zakladki
+       linia = QtGui.QFontMetrics(QtGui.QFont("Courier New")).lineSpacing()
+       self.hinfo_e.setFixedHeight(3*linia + 2*self.hinfo_e.frameWidth() + int(2*self.hinfo_e.document().documentMargin()) + 2)
 
        self.coo_p = QPushButton("Load COO")
        self.coo_p.clicked.connect(self.get_coo)
@@ -198,7 +204,7 @@ class FitsView(QWidget):
        grid = QGridLayout()
 
        w = 0
-       grid.addWidget(self.hinfo_e,w,0,3,5)
+       grid.addWidget(self.hinfo_e,w,0,1,5)
 
        w = 1
        grid.addWidget(self.TabWindow,w,0,4,5)
@@ -251,24 +257,87 @@ class FitsView(QWidget):
         for x in self.tab:
             x.update()
 
-    def add_coo(self,data,name="data",color=None,plot_image=True):
-        tmp = {}
-        tmp["data"] = data
-        tmp["name"] = name
-        if color != None:
-            tmp["marker_color"] = color
+    def find_data(self,lista,name):
+        # indeks wpisu o nazwie name w table_data / map_data / mask_data, albo None
+        for i,tmp in enumerate(lista):
+            if tmp["name"] == name: return i
+        return None
+
+    def put_tab(self,widget,title,old=None):
+        # nowa zakladka, albo podmiana starej (old) na tej samej pozycji
+        if old in self.tab and self.TabWindow.indexOf(old) >= 0:
+            i = self.TabWindow.indexOf(old)
+            self.tab[self.tab.index(old)] = widget
+            self.TabWindow.removeTab(i)
+            self.TabWindow.insertTab(i, widget, title)
         else:
-            tmp["marker_color"] = next(self.color_cycle)
-        tmp["plot_image"] = plot_image
+            self.tab.append(widget)
+            self.TabWindow.addTab(widget, title)
 
+    def add_coo(self,data,name="data",color=None,plot_image=True):
+        # tabela o tej samej nazwie (np. ponowne FFS) jest podmieniana, kolor markerow zostaje
+        i = self.find_data(self.table_data,name)
+        if i is None:
+            tmp = {}
+            tmp["name"] = name
+            if color != None:
+                tmp["marker_color"] = color
+            else:
+                tmp["marker_color"] = next(self.color_cycle)
+            tmp["plot_image"] = plot_image
+            tmp["tab"] = None
+            self.table_data.append(tmp)
+            i = len(self.table_data) - 1
+        tmp = self.table_data[i]
+        tmp["data"] = data
         tmp["selected_index"] = -1
-        self.table_data.append(tmp)
 
-        self.tab.append(FitsView_catalog.Catalog(self, data, data_index=len(self.table_data) - 1))
-        self.TabWindow.addTab(self.tab[-1], "catalog")
-        self.tab[-1].update()
+        old = tmp["tab"]
+        tmp["tab"] = FitsView_catalog.Catalog(self, data, data_index=i)
+        self.put_tab(tmp["tab"], os.path.basename(str(name)), old)
+        tmp["tab"].update()
 
         self.update_tabs()
+
+    def add_map(self,data,name="map",description="",view=None):
+        # view: poczatkowy widok (x1, x2, y1, y2) w ukladzie oryginalu, np. wycinek FFS; None = cala klatka
+        i = self.find_data(self.map_data,name)
+        if i is None:
+            self.map_data.append({"name": name, "tab": None})
+            i = len(self.map_data) - 1
+        tmp = self.map_data[i]
+        tmp["data"] = data
+        tmp["description"] = description
+        tmp["view"] = view
+
+        old = tmp["tab"]
+        tmp["tab"] = FitsView_maps.MapTab(self, i)
+        self.put_tab(tmp["tab"], name, old)
+        tmp["tab"].update()
+
+    def add_mask(self,data,name="mask",description="",color=None,plot_image=True,view=None):
+        i = self.find_data(self.mask_data,name)
+        if i is None:
+            if color == None: color = next(self.color_cycle)
+            self.mask_data.append({"name": name, "tab": None, "color": color, "plot_image": plot_image, "style": "contour"})
+            i = len(self.mask_data) - 1
+        tmp = self.mask_data[i]
+        tmp["data"] = data
+        tmp["description"] = description
+        tmp["view"] = view
+
+        old = tmp["tab"]
+        tmp["tab"] = FitsView_maps.MaskTab(self, i)
+        self.put_tab(tmp["tab"], name, old)
+        tmp["tab"].update()
+
+        self.update_overlays()
+
+    def update_overlays(self):
+        # punkty, linie i maski na wszystkich obrazach (bez przerysowania samego obrazu)
+        for tab in self.tab:
+            if hasattr(tab, "update_points"):
+                tab.update_points()
 
 
     def load_coo(self):

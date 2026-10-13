@@ -7,6 +7,8 @@ import numpy as np
 from astropy.io import fits
 
 from matplotlib import cm
+from matplotlib.colors import ListedColormap
+from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -70,6 +72,7 @@ class Image(QWidget):
         self.min_e.textChanged.connect(self.change_clim)
         self.fitI_p.clicked.connect(self.fit_image)
         self.shopt_p.clicked.connect(self.show_optiones)
+        self.ffs_p.clicked.connect(self.open_ffs)
         self.showM_c.stateChanged.connect(self.update)
         self.rot90_c.stateChanged.connect(self.zmiana_rot90)
         self.flipX_c.stateChanged.connect(self.zmiana_flipX)
@@ -81,8 +84,7 @@ class Image(QWidget):
 
 
     def initiatie(self):
-        self.x=int(len(self.dane[0])/2)
-        self.y=int(len(self.dane)/2)
+        self.x,self.y = self.to_screen(int(len(self.dane[0])/2), int(len(self.dane)/2))
         self.saturation_e.setText(str(self.parent.cfg_saturation))
         index = self.cmap_s.findText(str(self.parent.cfg_cmap).strip())
         self.cmap_s.setCurrentIndex(index)
@@ -140,11 +142,36 @@ class Image(QWidget):
 
 
     def update_mask(self):
-        for mk in self.parent.mask_list:
-            mask_float = mk.astype(float)
-            mask_float = np.transpose(mask_float)
-            self.axes.contour(mask_float,levels=[0.5],colors='red',linewidths=1.5)
+        # maski z parent.mask_data (zakladki MaskTab); kontur albo polprzezroczyste wypelnienie
+        x1,x2 = self.axes.get_xlim()           # contour/imshow potrafia zmienic zakres osi
+        y1,y2 = self.axes.get_ylim()
+        for zestaw in self.parent.mask_data:
+            if not zestaw["plot_image"]: continue
+            mk = zestaw["data"]
+            if mk.shape != self.dane.shape: continue
+            if self.parent.cfg_rot90: mk = numpy.rot90(mk)   # maska w ukladzie oryginalu, jak dane
+            if zestaw["style"] == "fill":
+                self.axes.imshow(numpy.ma.masked_where(~mk, mk), cmap=ListedColormap([zestaw["color"]]),
+                                 vmin=0, vmax=1, alpha=0.5, interpolation="none")
+            elif mk.any():
+                self.axes.contour(mk.astype(float),levels=[0.5],colors=zestaw["color"],linewidths=1.5)
+        self.axes.set_xlim(x1,x2)
+        self.axes.set_ylim(y1,y2)
         self.canvas.draw_idle()
+
+    def update_segments(self,zestaw):
+        # tabela z odcinkami (kolumny x0, y0, x1, y1, np. ffs.lines); spike == True rysowane przerywana linia
+        dane = zestaw["data"]
+        x0,y0 = self.to_screen(numpy.array(dane["x0"]),numpy.array(dane["y0"]))
+        x1,y1 = self.to_screen(numpy.array(dane["x1"]),numpy.array(dane["y1"]))
+        segments = [[(a,b),(c,d)] for a,b,c,d in zip(x0,y0,x1,y1)]
+        if "spike" in dane.colnames: style = ["--" if s else "-" for s in dane["spike"]]
+        else: style = "-"
+        color = zestaw["marker_color"] if "marker_color" in zestaw.keys() else "r"
+        self.axes.add_collection(LineCollection(segments,colors=color,linestyles=style,linewidths=1.5),autolim=False)
+        n = zestaw["selected_index"]
+        if 0 <= n < len(segments):
+            self.axes.add_collection(LineCollection([segments[n]],colors="r",linewidths=4,alpha=0.5),autolim=False)
 
 
     def update_points(self):
@@ -165,9 +192,15 @@ class Image(QWidget):
             except Exception:
                 pass
 
+        for im in list(self.axes.images):     # wypelnienia masek; obraz zostaje
+            if im is not self.image: im.remove()
+
         for zestaw in self.parent.table_data:
 
-            if zestaw["plot_image"]:
+            if zestaw["plot_image"] and all(k in getattr(zestaw["data"],"colnames",[]) for k in ["x0","y0","x1","y1"]):
+                self.update_segments(zestaw)
+
+            elif zestaw["plot_image"]:
 
                 if "xcol" in zestaw.keys() and "ycol" in zestaw.keys():
                     xc = zestaw["xcol"]
@@ -176,12 +209,7 @@ class Image(QWidget):
                     x = zestaw["data"][xc]
                     y = zestaw["data"][yc]
 
-                    if self.parent.cfg_rot90:
-                        xs = y
-                        ys = float(len(self.dane[0]))-numpy.array(x)
-                    else:
-                        xs = x
-                        ys = y
+                    xs, ys = self.to_screen(x, y)
 
                     marker = "."
                     mksize = 10
@@ -226,12 +254,12 @@ class Image(QWidget):
                         self.points_set.append(sc)
 
 
-                    if zestaw["selected_index"] > 0:
+                    if zestaw["selected_index"] >= 0:
                         n = zestaw["selected_index"]
                         selection = self.axes.plot(xs[n],ys[n],marker="o",markersize=mksize+5,color="r",mfc='none',linestyle='None')
                         self.points_set.append(selection[0])
 
-        self.canvas.draw_idle()
+        self.update_mask()
 
     def update(self):
 
@@ -292,7 +320,7 @@ class Image(QWidget):
           if len(self.ext_x)>0:
              try:
                 if self.parent.cfg_rot90:
-                   self.axes.plot(self.ext_y,float(len(dane))-numpy.array(self.ext_x),str(self.parent.cfg_extMarker).strip(),markersize=mksize,mfc='none')
+                   self.axes.plot(*self.to_screen(self.ext_x,self.ext_y),str(self.parent.cfg_extMarker).strip(),markersize=mksize,mfc='none')
                 else: self.axes.plot(self.ext_x,self.ext_y,str(self.parent.cfg_extMarker).strip(),markersize=mksize,mfc='none')
              except ValueError:
                 self.msg = QMessageBox()
@@ -304,7 +332,7 @@ class Image(QWidget):
           if len(self.int_x)>0:
              try:
                 if self.parent.cfg_rot90:
-                   self.axes.plot(self.int_y,float(len(dane))-numpy.array(self.int_x),str(self.parent.cfg_intMarker).strip(),markersize=mksize,alpha=0.5,mfc='none')
+                   self.axes.plot(*self.to_screen(self.int_x,self.int_y),str(self.parent.cfg_intMarker).strip(),markersize=mksize,alpha=0.5,mfc='none')
                 else: self.axes.plot(self.int_x,self.int_y,str(self.parent.cfg_intMarker).strip(),markersize=mksize,alpha=0.5,mfc='none')
              except ValueError:
                 self.msg = QMessageBox()
@@ -328,7 +356,6 @@ class Image(QWidget):
         self.reset_viewfinder()
 
         self.update_points()
-        self.update_mask()
 
     def reset_viewfinder(self):
 
@@ -385,8 +412,7 @@ class Image(QWidget):
 
     def fit_image(self):
         self.zoom_s.setValue(1)
-        self.x=int(len(self.dane[0])/2)
-        self.y=int(len(self.dane)/2)
+        self.x,self.y = self.to_screen(int(len(self.dane[0])/2), int(len(self.dane)/2))
         self.zmiana_zoom()
 
     def zmiana_zoom(self):
@@ -415,10 +441,12 @@ class Image(QWidget):
        self.rectangle=patches.Rectangle((x1,y1),dx,dy,linewidth=0.8,edgecolor='r',facecolor='none')
        self.axes_small.add_patch(self.rectangle)
 
-       if self.parent.cfg_flipX: self.axes_small.set_xlim(len(self.dane[0]),0)
-       else: self.axes_small.set_xlim(0,len(self.dane[0]))
-       if self.parent.cfg_flipY: self.axes_small.set_ylim(len(self.dane),0)
-       else: self.axes_small.set_ylim(0,len(self.dane))
+       ny,nx = self.dane.shape
+       if self.parent.cfg_rot90: nx,ny = ny,nx
+       if self.parent.cfg_flipX: self.axes_small.set_xlim(nx,0)
+       else: self.axes_small.set_xlim(0,nx)
+       if self.parent.cfg_flipY: self.axes_small.set_ylim(ny,0)
+       else: self.axes_small.set_ylim(0,ny)
 
        self.canvas_small.draw()
 
@@ -445,11 +473,10 @@ class Image(QWidget):
        wsize=2*int(self.parent.cfg_apersize)+15
        apersize=int(self.parent.cfg_apersize)
 
-       counts=self.dane[int(y)][int(x)]
-       if self.parent.cfg_rot90: counts=self.dane[int(x)][int(len(self.dane[0])-y)]
+       counts=self.pixel_value(x,y)
+       xr,yr=self.to_orig(x,y)
 
-       txt = "%.2f %.2f %d"% (x,y,counts)
-       if self.parent.cfg_rot90: txt = "%.2f %.2f %d"% (float(len(self.dane[0])-y),x,counts)
+       txt = "%.2f %.2f %d"% (xr,yr,counts)
        self.coor_l.setText(txt)
 
        try:
@@ -495,11 +522,11 @@ class Image(QWidget):
           self.parent.cfg_rot90=True
           x,y=self.x,self.y
           self.x=y
-          self.y=len(self.dane)-x
+          self.y=len(self.dane[0])-1-x
        else:
           self.parent.cfg_rot90=False
           x,y=self.x,self.y
-          self.x=len(self.dane)-y
+          self.x=len(self.dane[0])-1-y
           self.y=x
 
        self.update()
@@ -555,6 +582,23 @@ class Image(QWidget):
        self.hdrl_window=FitsView_widgets.HeaderTabLocal(self,self.hdr)
        self.parent.active_windows.append(self.hdrl_window)
 
+    # rot90: na ekranie jest numpy.rot90(self.dane), czyli piksel oryginalu (x, y) lezy w X = y, Y = nx - 1 - x
+    def to_screen(self, x, y):
+        if self.parent.cfg_rot90:
+            return y, len(self.dane[0]) - 1 - numpy.asarray(x)
+        return x, y
+
+    def to_orig(self, X, Y):
+        if self.parent.cfg_rot90:
+            return len(self.dane[0]) - 1 - Y, X
+        return X, Y
+
+    def pixel_value(self, X, Y):
+        # wartosc piksela pod punktem ekranu (X, Y)
+        if self.parent.cfg_rot90:
+            return self.dane[int(X)][len(self.dane[0]) - 1 - int(Y)]
+        return self.dane[int(Y)][int(X)]
+
     def get_local_stamp(self,xr,yr,r):
        # clamp to array bounds instead of letting negative/overflowing slice
        # indices wrap around to the opposite edge of the array, which was
@@ -569,6 +613,30 @@ class Image(QWidget):
        return dane,x0,y0
 
 
+    def open_ffs(self):
+        # okno FFS dla widocznego fragmentu obrazu (klawisz 's' lub przycisk FFS)
+        ny, nx = self.dane.shape
+        x1, x2 = sorted(self.axes.get_xlim())     # przy flip X/Y granice osi sa malejace
+        y1, y2 = sorted(self.axes.get_ylim())
+        if self.parent.cfg_rot90:                 # ekran (X,Y) -> oryginal x = nx - 1 - Y, y = X
+            x1, x2, y1, y2 = nx - 1 - y2, nx - 1 - y1, x1, x2
+        x1, x2 = int(max(x1, 0)), int(min(x2, nx))
+        y1, y2 = int(max(y1, 0)), int(min(y2, ny))
+
+        image = self.dane[y1:y2, x1:x2]
+
+        if not self.s_window:
+            self.s_window = FitsView_widgets.FFSWindow(self, image, dx=x1, dy=y1)
+            self.parent.active_windows.append(self.s_window)
+        else:
+            self.s_window.image = image
+            self.s_window.dx = x1
+            self.s_window.dy = y1
+            self.s_window.initFFS()
+
+        self.s_window.show()
+        self.s_window.raise_()
+
     def keypressed(self,event):
         if not self.text_window:
           self.text_window=FitsView_widgets.TextWindow(self)
@@ -576,11 +644,7 @@ class Image(QWidget):
 
         x=event.xdata
         y=event.ydata
-        xr,yr=x,y
-
-        if self.parent.cfg_rot90:
-          xr=len(self.dane[0])-y
-          yr=x
+        xr,yr=self.to_orig(x,y)
 
         if self.parent.special:
           self.parent.com.xPressed.emit(event.key,xr,yr)
@@ -590,7 +654,7 @@ class Image(QWidget):
             self.int_x.append(xr)
             self.int_y.append(yr)
             self.update()
-            counts=self.dane[int(y)][int(x)]
+            counts=self.pixel_value(x,y)
             txt=str(xr)+" "+str(yr)+" "+str(counts)+" m"
             txt2 = "marked x=%.2f y=%.2f counts=%d"%(xr,yr,counts)
             self.text_window.txt=txt2
@@ -604,28 +668,7 @@ class Image(QWidget):
             self.update()
 
 
-            x1,x2 = self.axes.get_xlim()
-            if x1<0: x1=0
-            if x2>len(self.dane[int(y),:])-1: x2=len(self.dane[int(y),:])-1
-
-            y1,y2 = self.axes.get_ylim()
-            if y1<0: y1=0
-            if y2>len(self.dane[:,int(x)])-1: y2=len(self.dane[:,int(x)])-1
-
-            image=numpy.transpose(self.dane[int(y1):int(y2),int(x1):int(x2)])
-
-            # DUPA
-            if not self.s_window:
-                self.s_window=FitsView_widgets.FFSWindow(self,image,dx=x1,dy=y1)
-                self.parent.active_windows.append(self.s_window)
-            else:
-                self.s_window.image = image
-                self.s_window.dx = x1
-                self.s_window.dy = y1
-                self.s_window.initFFS()
-
-            self.s_window.show()
-            self.s_window.raise_()
+            self.open_ffs()
 
 
           # q34 = (numpy.quantile(dane, 0.83725) - numpy.quantile(dane, 0.16275))/2.
@@ -799,23 +842,19 @@ class Image(QWidget):
           xy, ok = QInputDialog.getText(self, 'Go To', 'Enter X Y:')
           if ok:
              try:
-                if "," in xy: x,y = float(str(xy).split(",")[0]),float(str(xy).split(",")[1])
-                else: x,y = float(str(xy).split()[0]),float(str(xy).split()[1])
+                if "," in xy: gx,gy = float(str(xy).split(",")[0]),float(str(xy).split(",")[1])
+                else: gx,gy = float(str(xy).split()[0]),float(str(xy).split()[1])
              except (ValueError,IndexError): ok=False
 
           if ok:
-             xr,yr=x,y
-             if self.parent.cfg_rot90:
-                xr=y
-                yr=len(self.dane)-x
-             self.x = xr
-             self.y = yr
+             self.x, self.y = self.to_screen(gx, gy)
+             x, y = self.x, self.y          # viewfinder na koncu keypressed bierze wspolrzedne ekranu
              self.zmiana_zoom()
-             self.int_x.append(xr)
-             self.int_y.append(yr)
+             self.int_x.append(gx)
+             self.int_y.append(gy)
              self.update()
-             txt2=str(x)+" "+str(y)+" g"
-             txt="Marked x=%.1f y=%.1f"%(x,y)
+             txt2=str(gx)+" "+str(gy)+" g"
+             txt="Marked x=%.1f y=%.1f"%(gx,gy)
              self.text_window.txt=txt
              self.text_window.update()
              print(txt2)
@@ -831,7 +870,7 @@ class Image(QWidget):
           #except: pass
 
           if self.parent.cfg_rot90:
-              x1, x2 = self.axes.get_ylim()
+              x1, x2 = [self.to_orig(0, Y)[0] for Y in self.axes.get_ylim()]
           else:
               x1, x2 = self.axes.get_xlim()
 
@@ -847,10 +886,11 @@ class Image(QWidget):
           self.c_window.axes.plot(xxx,yyy)
           self.c_window.canvas.draw()
 
-          self.hline=y
+          if self.parent.cfg_rot90: self.vline=x
+          else: self.hline=y
           self.update()
 
-          txt="line y=%.2f   "%(y)
+          txt="line y=%.2f   "%(yr)
           self.text_window.txt=txt
           self.text_window.update()
           self.c_window.txt=txt
@@ -887,10 +927,11 @@ class Image(QWidget):
           self.c_window.axes.plot(xxx,yyy)
           self.c_window.canvas.draw()
 
-          self.vline=x
+          if self.parent.cfg_rot90: self.hline=y
+          else: self.vline=x
           self.update()
 
-          txt="column x=%.2f "%(x)
+          txt="column x=%.2f "%(xr)
           self.text_window.txt=txt
           self.text_window.update()
           self.c_window.txt=txt
@@ -1079,6 +1120,7 @@ class Image(QWidget):
 
        self.header_p =  QPushButton('Header')
        self.savePic_p =  QPushButton('Save Pic')
+       self.ffs_p =  QPushButton('FFS')
 
 
        # Main image  ---------------------------------------------------------------
@@ -1151,7 +1193,8 @@ class Image(QWidget):
 
        grid.addWidget(self.header_p,4,6)
        grid.addWidget(self.fitI_p,4,7)
-       grid.addWidget(self.shopt_p,5,6,1,2)
+       grid.addWidget(self.ffs_p,5,6)
+       grid.addWidget(self.shopt_p,5,7)
 
 
        self.setLayout(grid)

@@ -5,9 +5,13 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from PyQt5.QtWidgets import QMainWindow, QWidget, QLabel, QTextEdit, QLineEdit, QPushButton, \
-    QGridLayout, QHBoxLayout, QVBoxLayout, QComboBox
+    QGridLayout, QHBoxLayout, QVBoxLayout, QComboBox, QCheckBox, QTableWidget, \
+    QTableWidgetItem, QApplication, QTabWidget
+from PyQt5 import QtCore
 
 import numpy as np
+import numpy
+import inspect, re, html, traceback
 
 from astropy.table import Table
 
@@ -243,175 +247,364 @@ class FigureWindow(QWidget):
             self.toolbar.hide()
         QMainWindow.resizeEvent(self, event)
 
+def doc_summary(func):
+    # pierwszy akapit docstringu metody FFS (podpowiedz do przycisku)
+    doc = inspect.getdoc(func) or ""
+    return doc.split("\n\n")[0]
+
+def doc_params(func):
+    # opisy parametrow z sekcji "Parameters" docstringu (numpydoc): {nazwa: [typ, opis]}
+    doc = inspect.getdoc(func) or ""
+    out = {}
+    if "Parameters\n----------" not in doc: return out
+    sekcja = doc.split("Parameters\n----------")[1]
+    sekcja = re.split(r"\n\S[^\n]*\n-{3,}", sekcja)[0]          # do nastepnej sekcji (Notes, ...)
+    name = None
+    for line in sekcja.split("\n"):
+        if line and not line.startswith(" "):
+            name, _, typ = line.partition(" : ")
+            name = name.strip()
+            out[name] = [typ.strip(), ""]
+        elif name:
+            out[name][1] += line.strip() + " "
+    return out
+
+def to_value(txt):
+    # tekst z pola parametru -> None / int / float / str
+    txt = txt.strip()
+    if txt in ("", "None"): return None
+    for f in (int, float):
+        try: return f(txt)
+        except ValueError: pass
+    return txt
+
+def tooltip(title, txt):
+    # rich text, zeby Qt zawijal dlugie opisy
+    return "<b>%s</b><br>%s" % (html.escape(title), html.escape(txt).replace("\n", "<br>"))
+
+
 class FFSWindow(QWidget):
-    def __init__(self, parent, image, saturation=50000,dx=0,dy=0):
-        QWidget.__init__(self)
-        self.setWindowFlag(Qt.Tool)
+    # Okno FFS dla wycinka obrazu (image, przesuniety o dx, dy w pelnej klatce).
+    # Pola parametrow sa budowane z sygnatur metod FFS (wartosci domyslne biblioteki, chyba ze
+    # nadpisane w self.defaults), podpowiedzi z ich docstringow. Kazdy przycisk liczy od nowa
+    # caly ciag krokow do swojego etapu, w kolejnosci jak FFS.calc_frame_fwhm():
+    # saturacja, statystyki, tlo, kosmiki, linie, gwiazdy. Wyniki (maski, mapy, tabele) sa
+    # przenoszone do pelnej klatki; maski i mapy otwierane na zadanie ("Show").
+
+    def __init__(self, parent, image, saturation=None,dx=0,dy=0):
+        QWidget.__init__(self)          # zwykle okno (nie Qt.Tool), zeby nie zaslanialo glownego
         self.parent = parent
         self.image = image
-        self.saturation = saturation
         self.dx=int(dx)
         self.dy=int(dy)
 
+        if saturation is None:
+            try: saturation = float(self.parent.saturation_e.text())
+            except ValueError: saturation = 50000.
+
+        # wartosci domyslne GUI inne niz w bibliotece
+        self.defaults = {
+            ("FFS", "saturation"): saturation,
+            ("FFS", "autobin"): True,                   # duze klatki: inaczej find_lines potrzebuje >10 GB
+            ("find_stars", "threshold"): 10,            # jak calc_frame_fwhm
+            ("find_stars", "fwhm"): 5,
+            ("star_info", "N_stars"): 20,               # statystyki klatki z 20 najjasniejszych
+            ("mk_bad_columns_mask", "threshold"): 5,
+            ("mk_hot_pixels_mask", "threshold"): 50,
+            ("mk_cold_pixels_mask", "threshold"): 50,
+        }
+
         self.txt = ""
+        self.ffs = None
+        self.params = {}
+        self.products = []
 
         self.mkUI()
         self.initFFS()
 
     def initFFS(self):
-        size = self.image.shape
-        txt = f'------ {size} -------'
-        self.pole_e.append(txt)
+        h, w = self.image.shape
+        self.info_l.setText("cut: %d x %d px at x=%d, y=%d" % (w, h, int(self.dx), int(self.dy)))
+        self.run("stats")
 
-        self.ffs = FFS(self.image)
-        self.ffs.saturation = float(self.saturation_e.text())
-        self.ffs.mk_stats()
-        for k in self.ffs.stats.keys():
-            txt = f'{k}: {self.ffs.stats[k]:.2f}'
-            self.pole_e.append(txt)
-            #print(f'{k}: {ffs.stats[k]} // {ffs.stats_description[k]}')
+    # ------------------------------------------------------------------ liczenie
 
+    def get_params(self, name):
+        out = {}
+        for k, e in self.params[name].items():
+            if isinstance(e, QCheckBox): out[k] = e.isChecked()
+            elif isinstance(e, QComboBox): out[k] = e.currentText()
+            else: out[k] = to_value(e.text())
+        return out
 
-        #ffs.sky_gradient(n_segments=10)
-        #ffs.find_lines()
-        #ffs.star_info(box=15, N_stars=20)
-        #ffs.calc_star_stats()
+    def run(self, stage):
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            ffs = FFS(self.image, **self.get_params("FFS"))
+            ffs.mk_saturation_mask()
+            ffs.mk_stats()
+            if stage != "stats":
+                ffs.sky_map(**self.get_params("sky_map"))
+            if stage == "cosmics" or (stage in ("lines", "stars") and self.cosmics_c.isChecked()):
+                ffs.mk_cosmics_mask(**self.get_params("mk_cosmics_mask"))
+            if stage == "lines" or (stage == "stars" and self.lines_c.isChecked()):
+                ffs.mk_threshold_mask(**self.get_params("mk_threshold_mask"))
+                ffs.find_lines(**self.get_params("find_lines"))
+                ffs.classify_lines(**self.get_params("classify_lines"))
+            if stage == "stars":
+                ffs.find_stars(**self.get_params("find_stars"))
+                ffs.star_info(**self.get_params("star_info"))
+                ffs.calc_star_stats(**self.get_params("calc_star_stats"))
+                # katalog: wszystkie gwiazdy; star_info zostawia w coo tylko zmierzone, wiec find_stars od nowa
+                ffs.find_stars(**self.get_params("find_stars"))
+                ffs.star_info(box=self.get_params("star_info")["box"], N_stars=None)
+            if stage == "calibration":
+                ffs.mk_columns_map(**self.get_params("mk_columns_map"))
+                ffs.mk_bad_columns_mask(**self.get_params("mk_bad_columns_mask"))
+                ffs.mk_pixels_map(**self.get_params("mk_pixels_map"))
+                ffs.mk_hot_pixels_mask(**self.get_params("mk_hot_pixels_mask"))
+                ffs.mk_cold_pixels_mask(**self.get_params("mk_cold_pixels_mask"))
+        except Exception as e:
+            QApplication.restoreOverrideCursor()
+            traceback.print_exc()
+            self.pole_e.append("ERROR in %s: %s" % (stage, e))
+            return
+        QApplication.restoreOverrideCursor()
 
-    def find_pushed(self):
-        th = float(self.th_e.text())
-        fwhm = float(self.fwhm_e.text())
-        box = int(2 * fwhm)
-        self.ffs.saturation = float(self.saturation_e.text())
-        self.ffs.find_stars(threshold=th, fwhm=fwhm)
-        self.ffs.calc_frame_fwhm(threshold=th, fwhm=fwhm, box=box, N_stars=20)
-        self.ffs.star_info(box=box, N_stars=None)
+        self.ffs = ffs
+        self.pole_e.append("%s done (bin %d)" % (stage, ffs.bin))
+        self.show_results(stage)
 
-        stars = self.ffs.stars
-        stars["x"] = stars["x"] + self.dx
-        stars["y"] = stars["y"] + self.dy
+    # ------------------------------------------------------------------ wyniki
 
-        self.parent.parent.add_coo(stars, name="ffs.star_info")
+    def full_frame(self, a, fill):
+        # wynik z wycinka -> tablica w rozmiarze calej klatki (Image.dane)
+        out = numpy.full(self.parent.dane.shape, fill, dtype=type(fill) if fill is False else float)
+        h, w = a.shape
+        out[self.dy:self.dy + h, self.dx:self.dx + w] = a
+        return out
 
-        txt = f'{"frame_fwhm"}: {self.ffs.stats["frame_fwhm"]:.2f}'
-        self.pole_e.append(txt)
-        txt = f'{"frame_ellipticity"}: {self.ffs.stats["frame_ellipticity"]:.2f}'
-        self.pole_e.append(txt)
-        txt = f'{"frame_cpe"}: {self.ffs.stats["frame_cpe"]:.2f}'
-        self.pole_e.append(txt)
+    def shift_table(self, table):
+        # wspolrzedne tabeli z wycinka -> pelna klatka
+        table = table.copy()
+        for k in ["x", "x0", "x1", "star_x", "sky_surface_x"]:
+            if k in table.colnames: table[k] = table[k] + self.dx
+        for k in ["y", "y0", "y1", "star_y", "sky_surface_y"]:
+            if k in table.colnames: table[k] = table[k] + self.dy
+        if "rho" in table.colnames:
+            table["rho"] = table["rho"] + self.dx * numpy.cos(table["theta"]) + self.dy * numpy.sin(table["theta"])
+        return table
 
-    def calc_gradient(self):
-        self.ffs.saturation = float(self.saturation_e.text())
-        n = int(self.segments_e.text())
-        self.ffs.sky_gradient(n_segments=n)
-        txt = f'{"sky max amplitude"}: {self.ffs.stats["bkg_max_amplitude"]:.2f}'
-        self.pole_e.append(txt)
-        txt = f'{"sky frame gradient"}: {self.ffs.stats["bkg_frame_gradient"]:.2f}'
-        self.pole_e.append(txt)
+    def show_results(self, stage):
+        ffs = self.ffs
 
-        sky = self.ffs.sky
-        sky["sky_surface_x"] = sky["sky_surface_x"] + self.dx
-        sky["sky_surface_y"] = sky["sky_surface_y"] + self.dy
-        self.parent.parent.add_coo(sky, name="ffs.sky")
+        stats = [(k, v) for k, v in ffs.stats["frame"].items() if numpy.ndim(v) == 0]
+        self.stats_t.setRowCount(len(stats))
+        for i, (k, v) in enumerate(stats):
+            opis = ffs.stats_description["frame"].get(k, "")
+            for j, txt in enumerate([k, "%.4g" % v]):
+                item = QTableWidgetItem(txt)
+                item.setToolTip(tooltip(k, opis))
+                self.stats_t.setItem(i, j, item)
+        self.stats_t.resizeColumnsToContents()
 
-    def find_lines(self):
-        self.ffs.find_lines()
+        # (typ, nazwa, opis); tabele gwiazd i linii od razu na Image, reszta na zadanie
+        self.products = []
+        for k in ffs.masks: self.products.append(("mask", k, ffs.masks_description.get(k, "")))
+        for k in ffs.maps: self.products.append(("map", k, ffs.maps_description.get(k, "")))
+        if ffs.sky is not None: self.products.append(("table", "sky segments", "Sky segments: centres and fitted background (sky_gradient)"))
+        if ffs.lines is not None: self.products.append(("table", "lines", "Detected lines (find_lines, classify_lines)"))
+        if ffs.stars is not None: self.products.append(("table", "stars", "Measured stars (find_stars, star_info)"))
 
-        r = self.ffs.stats["lines"]["rho"][0]
-        t = self.ffs.stats["lines"]["theta"][0]
+        self.products_t.setRowCount(len(self.products))
+        for i, (typ, name, opis) in enumerate(self.products):
+            for j, txt in enumerate([typ, name]):
+                item = QTableWidgetItem(txt)
+                item.setToolTip(tooltip(name, opis))
+                self.products_t.setItem(i, j, item)
+        self.products_t.resizeColumnsToContents()
 
-        x_val = np.arange(self.image.shape[0])
-        y_val = self.hough_to_xy(r,t,x_val)
+        if stage in ("lines", "stars") and ffs.lines is not None:
+            self.show_product("table", "lines")
+        if stage == "stars":
+            self.show_product("table", "stars")
+            self.pole_e.append("frame_fwhm: %.2f  ellipticity: %.2f  used_stars: %d" % (
+                ffs.stats["frame"]["fwhm"], ffs.stats["frame"]["ellipticity"], ffs.stats["frame"]["used_stars"]))
 
-        y_idx = np.round(y_val).astype(int)
-        line_mask = np.zeros_like(self.ffs.maska, dtype=bool)
-        valid = (y_idx >= 0) & (y_idx < max(y_val))
-        line_mask[y_idx[valid], x_val[valid]] = True
+        # juz otwarte zakladki z poprzedniego przebiegu - odswiezamy
+        gui = self.parent.parent
+        for typ, name, opis in self.products:
+            if typ == "mask" and gui.find_data(gui.mask_data, self.tab_name(typ, name)) is not None: self.show_product(typ, name)
+            if typ == "map" and gui.find_data(gui.map_data, self.tab_name(typ, name)) is not None: self.show_product(typ, name)
 
-        maska = self.ffs.maska & line_mask
+    def view(self):
+        # wycinek w pelnej klatce (x1, x2, y1, y2): poczatkowy widok zakladek map i masek
+        h, w = self.image.shape
+        return (self.dx - 0.5, self.dx + w - 0.5, self.dy - 0.5, self.dy + h - 0.5)
 
-        self.parent.parent.mask_list.append(maska)
+    def tab_name(self, typ, name):
+        # np. maska "lines" i tabela "lines" musza miec rozne zakladki
+        if typ == "table": return "ffs." + name
+        return "ffs.%s %s" % (name, typ)
 
-        self.parent.parent.update_tabs()
+    def show_product(self, typ, name):
+        gui = self.parent.parent
+        ffs = self.ffs
+        if typ == "mask":
+            gui.add_mask(self.full_frame(ffs.masks[name], False), name=self.tab_name(typ, name), description=ffs.masks_description.get(name, ""), view=self.view())
+        elif typ == "map":
+            gui.add_map(self.full_frame(ffs.maps[name], numpy.nan), name=self.tab_name(typ, name), description=ffs.maps_description.get(name, ""), view=self.view())
+        elif typ == "table":
+            table = {"sky segments": ffs.sky, "lines": ffs.lines, "stars": ffs.stars}[name]
+            gui.add_coo(self.shift_table(table), name=self.tab_name(typ, name))
 
+    def show_pushed(self):
+        rows = sorted(set(i.row() for i in self.products_t.selectedIndexes()))
+        for i in rows:
+            typ, name, opis = self.products[i]
+            self.show_product(typ, name)
 
-    def hough_to_xy(self, rho, theta, x):
+    def product_clicked(self, index):
+        typ, name, opis = self.products[index.row()]
+        self.show_product(typ, name)
 
-        x_vals = np.array(x)
+    # ------------------------------------------------------------------ UI
 
-        cos_t = np.cos(theta)
-        sin_t = np.sin(theta)
+    def mk_params(self, grid, w, func, label=True):
+        # pola parametrow metody FFS: nazwy i wartosci domyslne z sygnatury, podpowiedzi z docstringu
+        name = "FFS" if func.__name__ == "__init__" else func.__name__
+        docs = doc_params(FFS if name == "FFS" else func)
+        self.params[name] = {}
+        if label:
+            l = QLabel("<i>%s</i>" % name)
+            l.setToolTip(tooltip(name, doc_summary(func)))
+            grid.addWidget(l, w, 0, 1, 4)
+            w = w + 1
+        col = 0
+        for p in list(inspect.signature(func).parameters.values())[1:]:     # bez self
+            if p.name == "image": continue
+            default = self.defaults.get((name, p.name), p.default)
+            typ, opis = docs.get(p.name, ["", ""])
+            if isinstance(default, bool):
+                e = QCheckBox()
+                e.setChecked(default)
+            elif typ.startswith("{"):
+                e = QComboBox()
+                e.addItems(re.findall(r'"([^"]+)"', typ))
+                e.setCurrentText(str(default))
+            else:
+                e = QLineEdit(str(default))
+                e.setMaximumWidth(80)
+            l = QLabel(p.name.replace("_", " ") + ":")       # dlugie nazwy zawijane; prawdziwa nazwa w podpowiedzi
+            l.setWordWrap(True)
+            l.setMaximumWidth(110)
+            for x in [l, e]: x.setToolTip(tooltip("%s  (%s)" % (p.name, typ), opis))
+            self.params[name][p.name] = e
+            grid.addWidget(l, w, col)
+            grid.addWidget(e, w, col + 1)
+            col = col + 2
+            if col >= 4:
+                col = 0
+                w = w + 1
+        if col > 0: w = w + 1
+        return w
 
-        # if line is not vertical
-        if abs(sin_t) > 1e-8:
-            y = (rho - x_vals * cos_t) / sin_t
+    def mk_page(self, funcs, use=None):
+        # zakladka z parametrami jednego etapu; use - checkbox wlaczajacy etap w ciagu krokow
+        page = QWidget()
+        grid = QGridLayout()
+        w = 0
+        if use is not None:
+            grid.addWidget(use, w, 0, 1, 4)
+            w = w + 1
+        for f in funcs:
+            w = self.mk_params(grid, w, f, label=len(funcs) > 1)
+        grid.setRowStretch(w, 1)
+        page.setLayout(grid)
+        return page
 
-        return(y)
-
+    def mk_button(self, title, funcs, stage):
+        p = QPushButton(title)
+        p.setToolTip(tooltip(title, "\n\n".join(doc_summary(f) for f in funcs)))
+        p.clicked.connect(lambda: self.run(stage))
+        return p
 
     def mkUI(self):
         self.setWindowTitle('FFS')
-        grid = QGridLayout()
 
-        w = 0
+        self.info_l = QLabel()
 
-        self.saturation_l = QLabel("saturation:")
-        self.saturation_e = QLineEdit("50000")
+        self.cosmics_c = QCheckBox("mask cosmics before lines and stars")
+        self.cosmics_c.setChecked(True)
+        self.lines_c = QCheckBox("find (and mask) lines before stars")
+        self.lines_c.setChecked(True)
 
-        grid.addWidget(self.saturation_l, w, 0)
-        grid.addWidget(self.saturation_e, w, 1)
+        frame = [FFS.__init__]
+        sky = [FFS.sky_map]
+        cosmics = [FFS.mk_cosmics_mask]
+        lines = [FFS.mk_threshold_mask, FFS.find_lines, FFS.classify_lines]
+        stars = [FFS.find_stars, FFS.star_info, FFS.calc_star_stats]
+        calib = [FFS.mk_columns_map, FFS.mk_bad_columns_mask, FFS.mk_pixels_map, FFS.mk_hot_pixels_mask, FFS.mk_cold_pixels_mask]
 
-        w = w + 1
+        self.params_t = QTabWidget()
+        self.params_t.addTab(self.mk_page(frame), "Frame")
+        self.params_t.addTab(self.mk_page(sky), "Sky")
+        self.params_t.addTab(self.mk_page(cosmics, self.cosmics_c), "Cosmics")
+        self.params_t.addTab(self.mk_page(lines, self.lines_c), "Lines")
+        self.params_t.addTab(self.mk_page(stars), "Stars")
+        self.params_t.addTab(self.mk_page(calib), "Calib.")
+        self.params_t.setTabToolTip(0, tooltip("FFS", doc_summary(FFS)))
 
-        self.find_p = QPushButton('Find stars', self)
-        self.find_p.clicked.connect(self.find_pushed)
+        # kazdy przycisk liczy od nowa wszystkie kroki do swojego etapu
+        buttons = QGridLayout()
+        buttons.addWidget(self.mk_button("Statistics", frame, "stats"), 0, 0)
+        buttons.addWidget(self.mk_button("Sky", sky, "sky"), 0, 1)
+        buttons.addWidget(self.mk_button("Cosmics", cosmics, "cosmics"), 0, 2)
+        buttons.addWidget(self.mk_button("Find lines", lines, "lines"), 1, 0)
+        buttons.addWidget(self.mk_button("Find stars", stars, "stars"), 1, 1)
+        buttons.addWidget(self.mk_button("Calibration", calib, "calibration"), 1, 2)
 
-        self.th_l = QLabel("Th:", self)
-        self.th_e = QLineEdit("10")
-        self.fwhm_l = QLabel("fwhm:")
-        self.fwhm_e = QLineEdit("5")
+        self.stats_t = QTableWidget(0, 2)
+        self.stats_t.setHorizontalHeaderLabels(["frame", "value"])
+        self.stats_t.verticalHeader().hide()
+        self.stats_t.horizontalHeader().setStretchLastSection(True)
+        self.stats_t.setEditTriggers(QTableWidget.NoEditTriggers)
 
-        grid.addWidget(self.find_p, w, 0)
-        grid.addWidget(self.th_l, w, 1)
-        grid.addWidget(self.th_e, w, 2)
-        grid.addWidget(self.fwhm_l, w, 3)
-        grid.addWidget(self.fwhm_e, w, 4)
+        self.products_t = QTableWidget(0, 2)
+        self.products_t.setHorizontalHeaderLabels(["type", "name"])
+        self.products_t.verticalHeader().hide()
+        self.products_t.horizontalHeader().setStretchLastSection(True)
+        self.products_t.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.products_t.setSelectionBehavior(QTableWidget.SelectRows)
+        self.products_t.doubleClicked.connect(self.product_clicked)
+        self.products_t.setToolTip("Double click or Show: open as a tab (masks are also drawn on the image)")
 
-        w = w + 1
-
-        self.gradient_p = QPushButton("Check sky:", self)
-        self.gradient_p.clicked.connect(self.calc_gradient)
-
-        self.segments_l = QLabel("Segments:", self)
-        self.segments_e = QLineEdit("10")
-
-        grid.addWidget(self.gradient_p, w, 0)
-        grid.addWidget(self.segments_l, w, 1)
-        grid.addWidget(self.segments_e, w, 2)
-
-        w = w + 1
-
-        self.lines_p = QPushButton("Find Lines:", self)
-        self.lines_p.clicked.connect(self.find_lines)
-
-        grid.addWidget(self.lines_p, w, 0)
-
-
-        w = w + 1
+        self.show_p = QPushButton("Show")
+        self.show_p.clicked.connect(self.show_pushed)
 
         self.pole_e = QTextEdit()
         self.pole_e.setReadOnly(1)
 
-        grid.addWidget(self.pole_e, w, 0, 3, 5)
-
-        w = w + 3
         self.cl_p = QPushButton('Close', self)
         self.cl_p.clicked.connect(self.close_window)
-        grid.addWidget(self.cl_p, w, 1, 1, 2)
 
+        grid = QGridLayout()
+        grid.addWidget(self.info_l, 0, 0, 1, 3)
+        grid.addWidget(self.params_t, 1, 0, 2, 1)
+        grid.addLayout(buttons, 3, 0)
+        grid.addWidget(self.pole_e, 4, 0)
+        grid.addWidget(self.stats_t, 1, 1, 1, 2)
+        grid.addWidget(self.products_t, 2, 1, 2, 2)
+        grid.addWidget(self.show_p, 4, 2, QtCore.Qt.AlignTop)
+        grid.addWidget(self.cl_p, 5, 2)
+        grid.setColumnStretch(0, 3)
+        grid.setColumnStretch(1, 2)
+        grid.setRowStretch(1, 1)
+        grid.setRowStretch(2, 1)
         self.setLayout(grid)
 
         gm = eval(self.parent.parent.cfg_geometry)
-        self.setGeometry(int(gm[1]) + int(gm[2]) + 10, int(gm[1]), 400, 500)
+        self.setGeometry(int(gm[1]) + int(gm[2]) + 10, int(gm[1]), 850, 650)
 
     def update(self):
         self.show()

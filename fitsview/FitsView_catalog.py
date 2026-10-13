@@ -44,6 +44,9 @@ class Catalog(QWidget):
         elif "x_center" in keys:
             ix = keys.index("x_center")
             self.xcol_s.setCurrentIndex(ix)
+        elif "x0" in keys:                    # odcinki (np. ffs.lines): poczatek odcinka
+            ix = keys.index("x0")
+            self.xcol_s.setCurrentIndex(ix)
         else:
             self.xcol_s.setCurrentIndex(0)
 
@@ -52,6 +55,9 @@ class Catalog(QWidget):
             self.ycol_s.setCurrentIndex(iy)
         elif "y_center" in keys:
             iy = keys.index("y_center")
+            self.ycol_s.setCurrentIndex(iy)
+        elif "y0" in keys:
+            iy = keys.index("y0")
             self.ycol_s.setCurrentIndex(iy)
         else:
             self.ycol_s.setCurrentIndex(1)
