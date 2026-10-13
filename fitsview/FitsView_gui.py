@@ -70,6 +70,7 @@ class FitsView(QWidget):
         self.special=False
 
         self.table_data = []
+        self.view = None         # wspolny widok zakladek z obrazem: (x, y, zoom), ImageView.zmiana_zoom
         self.map_data = []       # mapy (np. z FFS), kazda z wlasna zakladka MapTab
         self.mask_data = []      # maski (np. z FFS), zakladki MaskTab, rysowane na Image
 
@@ -117,8 +118,9 @@ class FitsView(QWidget):
           self.ext_y=[]
           self.ext_l=[]
 
-          self.map_data=[]       # mapy i maski naleza do poprzedniej klatki
+          self.map_data=[]       # mapy, maski i widok naleza do poprzedniej klatki
           self.mask_data=[]
+          self.view=None
 
 
           self.getFits()
@@ -299,8 +301,7 @@ class FitsView(QWidget):
 
         self.update_tabs()
 
-    def add_map(self,data,name="map",description="",view=None):
-        # view: poczatkowy widok (x1, x2, y1, y2) w ukladzie oryginalu, np. wycinek FFS; None = cala klatka
+    def add_map(self,data,name="map",description=""):
         i = self.find_data(self.map_data,name)
         if i is None:
             self.map_data.append({"name": name, "tab": None})
@@ -308,14 +309,13 @@ class FitsView(QWidget):
         tmp = self.map_data[i]
         tmp["data"] = data
         tmp["description"] = description
-        tmp["view"] = view
 
         old = tmp["tab"]
         tmp["tab"] = FitsView_maps.MapTab(self, i)
         self.put_tab(tmp["tab"], name, old)
         tmp["tab"].update()
 
-    def add_mask(self,data,name="mask",description="",color=None,plot_image=True,view=None):
+    def add_mask(self,data,name="mask",description="",color=None,plot_image=True):
         i = self.find_data(self.mask_data,name)
         if i is None:
             if color == None: color = next(self.color_cycle)
@@ -324,7 +324,6 @@ class FitsView(QWidget):
         tmp = self.mask_data[i]
         tmp["data"] = data
         tmp["description"] = description
-        tmp["view"] = view
 
         old = tmp["tab"]
         tmp["tab"] = FitsView_maps.MaskTab(self, i)

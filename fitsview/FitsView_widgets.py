@@ -437,11 +437,6 @@ class FFSWindow(QWidget):
             if typ == "mask" and gui.find_data(gui.mask_data, self.tab_name(typ, name)) is not None: self.show_product(typ, name)
             if typ == "map" and gui.find_data(gui.map_data, self.tab_name(typ, name)) is not None: self.show_product(typ, name)
 
-    def view(self):
-        # wycinek w pelnej klatce (x1, x2, y1, y2): poczatkowy widok zakladek map i masek
-        h, w = self.image.shape
-        return (self.dx - 0.5, self.dx + w - 0.5, self.dy - 0.5, self.dy + h - 0.5)
-
     def tab_name(self, typ, name):
         # np. maska "lines" i tabela "lines" musza miec rozne zakladki
         if typ == "table": return "ffs." + name
@@ -451,9 +446,9 @@ class FFSWindow(QWidget):
         gui = self.parent.parent
         ffs = self.ffs
         if typ == "mask":
-            gui.add_mask(self.full_frame(ffs.masks[name], False), name=self.tab_name(typ, name), description=ffs.masks_description.get(name, ""), view=self.view())
+            gui.add_mask(self.full_frame(ffs.masks[name], False), name=self.tab_name(typ, name), description=ffs.masks_description.get(name, ""))
         elif typ == "map":
-            gui.add_map(self.full_frame(ffs.maps[name], numpy.nan), name=self.tab_name(typ, name), description=ffs.maps_description.get(name, ""), view=self.view())
+            gui.add_map(self.full_frame(ffs.maps[name], numpy.nan), name=self.tab_name(typ, name), description=ffs.maps_description.get(name, ""))
         elif typ == "table":
             table = {"sky segments": ffs.sky, "lines": ffs.lines, "stars": ffs.stars}[name]
             gui.add_coo(self.shift_table(table), name=self.tab_name(typ, name))

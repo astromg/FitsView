@@ -6,7 +6,6 @@ import matplotlib.patches as patches
 import numpy as np
 from astropy.io import fits
 
-from matplotlib import cm
 from matplotlib.colors import ListedColormap
 from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
@@ -22,8 +21,12 @@ from PyQt5 import QtCore, QtGui
 from fitsview import FitsView_widgets
 
 
-class Image(QWidget):
-    def __init__(self,parent,hdu,plane=None):
+class ImageView(QWidget):
+    # Wspolna podstawa zakladek z obrazem: Image (HDU), MapTab, MaskTab (FitsView_maps).
+    # Wyswietlanie, zoom, viewfinder, miniatura, flip / rot90, min/max, markery i nakladki,
+    # klawisze ogolne (m, d, f, g, l, c). Rysowana jest tylko widoczna zakladka (self.dirty),
+    # zoom i srodek widoku sa wspolne dla wszystkich zakladek (parent.view).
+    def __init__(self,parent,dane):
         QWidget.__init__(self)
 
 
@@ -32,11 +35,9 @@ class Image(QWidget):
         self.int_x=[]
         self.int_y=[]
         self.parent=parent
-        self.plane=plane                    # numer plaszczyzny dla danych 3D, None dla zwyklego obrazka
-        if plane is None: dane=hdu.data
-        else: dane=hdu.data[plane]
-        self.dane = numpy.nan_to_num(dane, nan=0)
-        self.hdr=hdu.header
+        self.dane = dane
+        self.dirty = True                   # do przerysowania przy pokazaniu zakladki
+        self.points_dirty = False           # tylko nakladki (punkty, linie, maski) do przerysowania
 
         self.text_window=False
         self.r_window=False
@@ -63,7 +64,6 @@ class Image(QWidget):
 
 
         self.savePic_p.clicked.connect(self.save_pic)
-        self.header_p .clicked.connect(self.show_header)
         self.zoom_s.valueChanged.connect(self.zmiana_zoom)
         self.auto_p.clicked.connect(self.clim_auto)
         self.max_s.valueChanged.connect(self.zmiana_vmax)
@@ -72,7 +72,6 @@ class Image(QWidget):
         self.min_e.textChanged.connect(self.change_clim)
         self.fitI_p.clicked.connect(self.fit_image)
         self.shopt_p.clicked.connect(self.show_optiones)
-        self.ffs_p.clicked.connect(self.open_ffs)
         self.showM_c.stateChanged.connect(self.update)
         self.rot90_c.stateChanged.connect(self.zmiana_rot90)
         self.flipX_c.stateChanged.connect(self.zmiana_flipX)
@@ -153,8 +152,16 @@ class Image(QWidget):
             if zestaw["style"] == "fill":
                 self.axes.imshow(numpy.ma.masked_where(~mk, mk), cmap=ListedColormap([zestaw["color"]]),
                                  vmin=0, vmax=1, alpha=0.5, interpolation="none")
-            elif mk.any():
-                self.axes.contour(mk.astype(float),levels=[0.5],colors=zestaw["color"],linewidths=1.5)
+            else:
+                # kontur tylko w prostokacie z pikselami True (+1 px), na pelnej klatce 4k to ~0.6 s na maske
+                rows = numpy.flatnonzero(mk.any(axis=1))
+                cols = numpy.flatnonzero(mk.any(axis=0))
+                if rows.size == 0: continue
+                r0, r1 = max(rows[0]-1, 0), min(rows[-1]+2, mk.shape[0])
+                c0, c1 = max(cols[0]-1, 0), min(cols[-1]+2, mk.shape[1])
+                if r1-r0 < 2 or c1-c0 < 2: continue
+                self.axes.contour(mk[r0:r1,c0:c1].astype(float),levels=[0.5],colors=zestaw["color"],linewidths=1.5,
+                                  extent=(c0,c1-1,r0,r1-1))
         self.axes.set_xlim(x1,x2)
         self.axes.set_ylim(y1,y2)
         self.canvas.draw_idle()
@@ -175,6 +182,11 @@ class Image(QWidget):
 
 
     def update_points(self):
+        if self.dirty: return                      # i tak przerysuje sie cala przy pokazaniu zakladki
+        if not self.isVisible():
+            self.points_dirty = True
+            return
+        self.points_dirty = False
         #DUPA
         # for obj in self.points_set:
         #     obj.remove()
@@ -261,22 +273,39 @@ class Image(QWidget):
 
         self.update_mask()
 
+    def sync_options(self):
+        # checkboxy z konfiguracji (wspolnej dla zakladek); bez sygnalow, zeby np. zmiana_rot90
+        # nie przeliczyla drugi raz srodka widoku
+        for c, v in [(self.saturation_c, self.parent.cfg_showsat), (self.flipX_c, self.parent.cfg_flipX),
+                     (self.flipY_c, self.parent.cfg_flipY), (self.rot90_c, self.parent.cfg_rot90)]:
+            c.blockSignals(True)
+            c.setChecked(bool(v))
+            c.blockSignals(False)
+
+    def showEvent(self,event):
+        # przy pokazaniu zakladki: wspolny widok (zoom, srodek) i przerysowanie, jesli cos sie zmienilo
+        QWidget.showEvent(self,event)
+        self.sync_options()
+        if self.parent.view is not None:
+            self.x, self.y, zoom = self.parent.view
+            self.zoom_s.blockSignals(True)
+            self.zoom_s.setValue(zoom)
+            self.zoom_s.blockSignals(False)
+        if self.dirty: self.update()
+        else:
+            self.zmiana_zoom()
+            if self.points_dirty: self.update_points()
+
     def update(self):
+        # niewidoczna zakladka (nieaktywna) tylko zapamietuje, ze ma sie przerysowac (showEvent)
+        if not self.isVisible():
+            self.dirty = True
+            return
 
         #try: self.axes.lines[-1].remove()
         #except: pass
 
-        if self.parent.cfg_showsat: self.saturation_c.setChecked(True)
-        else: self.saturation_c.setChecked(False)
-
-        if self.parent.cfg_flipX: self.flipX_c.setChecked(True)
-        else: self.flipX_c.setChecked(False)
-
-        if self.parent.cfg_flipY: self.flipY_c.setChecked(True)
-        else: self.flipY_c.setChecked(False)
-
-        if self.parent.cfg_rot90: self.rot90_c.setChecked(True)
-        else: self.rot90_c.setChecked(False)
+        self.sync_options()
 
         if self.parent.cfg_rot90:
           dane=numpy.rot90(self.dane)
@@ -289,9 +318,7 @@ class Image(QWidget):
         self.axes.set_xticks([])
         self.axes.set_yticks([])
 
-        if ("3.3.0">matplotlib.__version__):
-          mymap = cm.get_cmap(self.parent.cfg_cmap.strip())
-        else: mymap = cm.get_cmap(self.parent.cfg_cmap.strip()).copy()
+        mymap = self.get_cmap()
 
         dane2=dane.copy()
 
@@ -339,22 +366,21 @@ class Image(QWidget):
                 self.msg.setText("'"+self.parent.cfg_intMarker.strip()+"'"+ " is not a proper marker style\nCheck configuration!")
                 self.msg.exec_()
 
-        self.canvas.draw()
+        mymap = self.get_cmap()
 
-        mymap = cm.get_cmap(self.parent.cfg_cmap.strip())
-        dane2=dane.copy()
-
+        # miniatura ma ~200 px: co k-ty piksel wystarczy (rysowanie calej klatki 4k to ~1 s)
+        k = max(1, max(dane.shape) // 1000)
+        ny, nx = dane.shape
         self.axes_small.clear()
-        self.image_small = self.axes_small.imshow(dane2,cmap=mymap,vmin=vmin, vmax=vmax,interpolation="None",aspect="equal",origin='lower')
+        self.image_small = self.axes_small.imshow(dane[::k,::k],cmap=mymap,vmin=vmin, vmax=vmax,interpolation="None",aspect="equal",origin='lower',
+                                                  extent=(-0.5, ((nx+k-1)//k)*k-0.5, -0.5, ((ny+k-1)//k)*k-0.5))
         self.axes_small.set_xticks([])
         self.axes_small.set_yticks([])
 
-
-        self.canvas_small.draw()
-
-        self.zmiana_zoom()
+        self.zmiana_zoom()                       # rysuje oba plotna (canvas, canvas_small)
         self.reset_viewfinder()
 
+        self.dirty = False
         self.update_points()
 
     def reset_viewfinder(self):
@@ -366,9 +392,7 @@ class Image(QWidget):
         vmin=self.min_s.value()
         vmax=self.max_s.value()
 
-        if ("3.3.0">matplotlib.__version__):
-          mymap = cm.get_cmap(self.parent.cfg_cmap.strip())
-        else:  mymap = cm.get_cmap(self.parent.cfg_cmap.strip()).copy()
+        mymap = self.get_cmap()
         dane2=dane.copy()
 
 
@@ -381,7 +405,11 @@ class Image(QWidget):
         self.image_viewfinder = self.axes_viewfinder.imshow(dane2,cmap=mymap,vmin=vmin, vmax=vmax,interpolation="None",aspect="equal")
         self.axes_viewfinder.set_xticks([])
         self.axes_viewfinder.set_yticks([])
-        self.canvas_viewfinder.draw()
+        # okno wokol srodka widoku (jak update_viewfinder); bez tego rysowana byla cala klatka (~1.4 s dla 4k)
+        wsize=2*int(self.parent.cfg_apersize)+15
+        self.axes_viewfinder.set_xlim(self.x-wsize,self.x+wsize)
+        self.axes_viewfinder.set_ylim(self.y-wsize,self.y+wsize)
+        self.canvas_viewfinder.draw_idle()
 
 
     def change_clim(self):
@@ -416,17 +444,19 @@ class Image(QWidget):
         self.zmiana_zoom()
 
     def zmiana_zoom(self):
+       if not self.isVisible(): return          # widok ustawi showEvent (parent.view)
 
        z=len(self.dane[0]) - self.zoom_s.value() + 1
-       z=int(z/2.)
+       z=max(int(z/2.),1)                       # przy maksymalnym zoomie bylo 0 -> zerowy zakres osi
        x0=self.x
        y0=self.y
+       self.parent.view = (self.x, self.y, self.zoom_s.value())    # wspolny dla wszystkich zakladek
 
        if self.parent.cfg_flipX: self.axes.set_xlim(x0+z,x0-z)
        else: self.axes.set_xlim(x0-z,x0+z)
        if self.parent.cfg_flipY: self.axes.set_ylim(y0+z,y0-z)
        else: self.axes.set_ylim(y0-z,y0+z)
-       self.canvas.draw()
+       self.canvas.draw_idle()                  # draw_idle: kilka prosb o rysowanie -> jedno rysowanie
 
        try: self.rectangle.remove()
        except: pass
@@ -448,7 +478,7 @@ class Image(QWidget):
        if self.parent.cfg_flipY: self.axes_small.set_ylim(ny,0)
        else: self.axes_small.set_ylim(0,ny)
 
-       self.canvas_small.draw()
+       self.canvas_small.draw_idle()
 
     def update_cfg(self):
 
@@ -503,6 +533,8 @@ class Image(QWidget):
        self.canvas.setFocus()
 
     def image_clicked(self,event):
+       # tylko klikniecie w obrazek lub miniature; poza nimi (margines, skala kolorow MapTab) xdata to None
+       if event.inaxes not in (self.axes, self.axes_small) or event.xdata is None: return
        self.x = event.xdata
        self.y = event.ydata
        self.zmiana_zoom()
@@ -529,7 +561,12 @@ class Image(QWidget):
           self.x=len(self.dane[0])-1-y
           self.y=x
 
-       self.update()
+       self.parent.view = (self.x, self.y, self.zoom_s.value())
+       self.parent.update_tabs()                # rot90 wspolne: pozostale zakladki przerysuja sie przy pokazaniu
+
+    def get_cmap(self):
+        # cmap z konfiguracji (wspolna dla obrazow); MapTab ma wlasna
+        return matplotlib.colormaps[self.parent.cfg_cmap.strip()]   # kopia, mozna ja modyfikowac
 
     def zmiana_cmap(self):
        self.parent.cfg_cmap=str(self.cmap_s.currentText())
@@ -578,10 +615,6 @@ class Image(QWidget):
        #frameon=None, metadata=None)
 
 
-    def show_header(self):
-       self.hdrl_window=FitsView_widgets.HeaderTabLocal(self,self.hdr)
-       self.parent.active_windows.append(self.hdrl_window)
-
     # rot90: na ekranie jest numpy.rot90(self.dane), czyli piksel oryginalu (x, y) lezy w X = y, Y = nx - 1 - x
     def to_screen(self, x, y):
         if self.parent.cfg_rot90:
@@ -613,30 +646,6 @@ class Image(QWidget):
        return dane,x0,y0
 
 
-    def open_ffs(self):
-        # okno FFS dla widocznego fragmentu obrazu (klawisz 's' lub przycisk FFS)
-        ny, nx = self.dane.shape
-        x1, x2 = sorted(self.axes.get_xlim())     # przy flip X/Y granice osi sa malejace
-        y1, y2 = sorted(self.axes.get_ylim())
-        if self.parent.cfg_rot90:                 # ekran (X,Y) -> oryginal x = nx - 1 - Y, y = X
-            x1, x2, y1, y2 = nx - 1 - y2, nx - 1 - y1, x1, x2
-        x1, x2 = int(max(x1, 0)), int(min(x2, nx))
-        y1, y2 = int(max(y1, 0)), int(min(y2, ny))
-
-        image = self.dane[y1:y2, x1:x2]
-
-        if not self.s_window:
-            self.s_window = FitsView_widgets.FFSWindow(self, image, dx=x1, dy=y1)
-            self.parent.active_windows.append(self.s_window)
-        else:
-            self.s_window.image = image
-            self.s_window.dx = x1
-            self.s_window.dy = y1
-            self.s_window.initFFS()
-
-        self.s_window.show()
-        self.s_window.raise_()
-
     def keypressed(self,event):
         if not self.text_window:
           self.text_window=FitsView_widgets.TextWindow(self)
@@ -660,31 +669,6 @@ class Image(QWidget):
             self.text_window.txt=txt2
             self.text_window.update()
             print(txt)
-
-
-        if "s" in event.key:
-            self.int_x.append(xr)
-            self.int_y.append(yr)
-            self.update()
-
-
-            self.open_ffs()
-
-
-          # q34 = (numpy.quantile(dane, 0.83725) - numpy.quantile(dane, 0.16275))/2.
-          #
-          # txt = "selected x=(%.2f,%.2f)  y=(%.2f,%.2f)\n"%(x1,x2,y1,y2)
-          # txt = txt+"min: %.2f\n"%(dane.min())
-          # txt = txt+"max: %.2f\n"%(dane.max())
-          # txt = txt+"mean: %.2f\n"%(numpy.mean(dane))
-          # txt = txt+"median: %.2f\n"%(numpy.median(dane))
-          # txt = txt+"spread: %.2f\n"%(numpy.std(dane))
-          # txt = txt + "sigma_q34: %.2f\n" % (q34)
-          #
-          # self.text_window.txt=txt
-          # self.text_window.update()
-          # print(txt)
-
 
 
         if "d" in event.key and not self.parent.special:
@@ -719,11 +703,11 @@ class Image(QWidget):
                         xc = zestaw["xcol"]
                         yc = zestaw["ycol"]
 
-                        x = zestaw["data"][xc]
-                        y = zestaw["data"][yc]
+                        cx = zestaw["data"][xc]
+                        cy = zestaw["data"][yc]
 
-                        diffx = numpy.array(x) - float(xr)
-                        diffy = numpy.array(y) - float(yr)
+                        diffx = numpy.array(cx) - float(xr)
+                        diffy = numpy.array(cy) - float(yr)
                         diff = diffx ** 2 + diffy ** 2
                         n = numpy.argmin(diff)
 
@@ -743,100 +727,6 @@ class Image(QWidget):
                     tab.update_selection()
 
 
-
-        if "b" in event.key:
-          r=int(self.parent.cfg_apersize)
-          dane,x0,y0 = self.get_local_stamp(xr,yr,r)
-          XX,YY = numpy.meshgrid(numpy.arange(dane.shape[1]),numpy.arange(dane.shape[0]))
-          tmp = numpy.vstack((dane.ravel(),XX.ravel(),YY.ravel()))
-          c,xx,yy=tmp[0],tmp[1],tmp[2]
-          d=((xx-x0)**2+(yy-y0)**2)**0.5
-          mk=d<r
-          aper = c[mk]
-          bc = aper.sum()/len(aper)
-          self.parent.cfg_bcg=str(bc)
-          txt2=str(xr)+" "+str(yr)+" "+str(bc)+" b"
-          txt="background level around x=%.1f y=%.1f measured: %.2f / pixel "%(xr,yr,bc)
-          self.int_x.append(xr)
-          self.int_y.append(yr)
-          self.update()
-          self.text_window.txt=txt
-          self.text_window.update()
-          print(txt2)
-
-
-        if "q" in event.key:
-          r=int(self.parent.cfg_apersize)
-          dane,x0,y0 = self.get_local_stamp(xr,yr,r)
-          XX,YY = numpy.meshgrid(numpy.arange(dane.shape[1]),numpy.arange(dane.shape[0]))
-          tmp = numpy.vstack((dane.ravel(),XX.ravel(),YY.ravel()))
-          c,xx,yy=tmp[0],tmp[1],tmp[2]
-          d=((xx-x0)**2+(yy-y0)**2)**0.5
-          mk=d<r
-          aper = c[mk]
-          zliczenia = aper.sum() - len(aper) * float(self.parent.cfg_bcg)
-
-          if zliczenia>0:
-             mag = -2.5*numpy.log10(zliczenia) + float(self.parent.cfg_zp)
-             txt2="%.1f %.1f %d %.2f q "%(xr,yr,zliczenia,mag)
-             txt="centered x=%.1f y=%.1f : counts=%d m=%.2f  "%(xr,yr,zliczenia,mag)
-          else:
-             txt2="%.1f %.1f %d nan q "%(xr,yr,zliczenia)
-             txt="centered x=%.1f y=%.1f : counts=%d  (non-positive net counts, magnitude undefined)"%(xr,yr,zliczenia)
-
-          self.int_x.append(xr)
-          self.int_y.append(yr)
-          self.update()
-          self.text_window.txt=txt
-          self.text_window.update()
-          print(txt2)
-
-        if "z" in event.key:
-          r=int(self.parent.cfg_apersize)
-          dane,x1,y1 = self.get_local_stamp(xr,yr,r)
-          XX,YY = numpy.meshgrid(numpy.arange(dane.shape[1]),numpy.arange(dane.shape[0]))
-          tmp = numpy.vstack((dane.ravel(),XX.ravel(),YY.ravel()))
-          c,xx,yy=tmp[0],tmp[1],tmp[2]
-
-          x0=numpy.sum(c*xx)/( numpy.sum(c) )
-          y0=numpy.sum(c*yy)/( numpy.sum(c) )
-          xr=xr+(x0-x1)
-          yr=yr+(y0-y1)
-
-          dane,_,_ = self.get_local_stamp(xr,yr,r)
-          XX,YY = numpy.meshgrid(numpy.arange(dane.shape[1]),numpy.arange(dane.shape[0]))
-          tmp = numpy.vstack((dane.ravel(),XX.ravel(),YY.ravel()))
-          c,xx,yy=tmp[0],tmp[1],tmp[2]
-          d=((xx-x0)**2+(yy-y0)**2)**0.5
-          mk=d<r
-          aper = c[mk]
-          zliczenia = aper.sum() - len(aper) * float(self.parent.cfg_bcg)
-
-          if zliczenia<=0:
-             txt="cannot set zero point: non-positive net counts (%d) in aperture - check background level"%(zliczenia)
-             self.text_window.txt=txt
-             self.text_window.update()
-             print(txt)
-          else:
-             mag = -2.5*numpy.log10(zliczenia) + float(self.parent.cfg_zp)
-
-             m_std, ok = QInputDialog.getText(self, 'Zero point', 'Enter star magnitude:')
-             if ok:
-                try: m_std=float(m_std)
-                except ValueError: ok=False
-
-             if ok:
-                d=m_std-mag
-                self.parent.cfg_zp=str(float(self.parent.cfg_zp)+d)
-                txt2="%.3f z"%(float(self.parent.cfg_zp))
-                txt="zero point set to %.3f"%(float(self.parent.cfg_zp))
-
-                self.int_x.append(xr)
-                self.int_y.append(yr)
-                self.update()
-                self.text_window.txt=txt
-                self.text_window.update()
-                print(txt2)
 
         if "g" in event.key:
           xy, ok = QInputDialog.getText(self, 'Go To', 'Enter X Y:')
@@ -939,123 +829,13 @@ class Image(QWidget):
           self.c_window.raise_()
           print(txt)
 
-        if "e" in event.key:
-
-          if not self.e_window:
-             self.e_window=FitsView_widgets.PlotWindow(self)
-             self.parent.active_windows.append(self.e_window)
-
-          self.e_window.show()
-          self.e_window.raise_()
-
-
-          r=int((2*int(self.parent.cfg_apersize)+15)/2.)
-
-          dane,x1,y1 = self.get_local_stamp(xr,yr,r)
-
-          XX,YY = numpy.meshgrid(numpy.arange(dane.shape[1]),numpy.arange(dane.shape[0]))
-          tmp = numpy.vstack((dane.ravel(),XX.ravel(),YY.ravel()))
-          c,xx,yy=tmp[0],tmp[1],tmp[2]
-          c=c-float(self.parent.cfg_bcg)
-
-
-
-
-          self.e_window.axes.clear()
-          self.e_window.axes.contour(dane)
-
-          self.e_window.canvas.draw()
-
-          txt="centered x=%.2f y=%.2f   "%(xr,yr)
-          self.int_x.append(xr)
-          self.int_y.append(yr)
-          self.update()
-          self.text_window.txt=txt
-          self.text_window.update()
-
-          self.e_window.txt=txt
-          self.e_window.update()
-          self.e_window.raise_()
-
-          print(txt)
-
-        if "r" in event.key:
-
-          if not self.r_window:
-             self.r_window=FitsView_widgets.PlotWindow(self)
-             self.parent.active_windows.append(self.r_window)
-
-          self.r_window.show()
-          self.r_window.raise_()
-
-          r=int(self.parent.cfg_apersize)
-
-          dane,x1,y1 = self.get_local_stamp(xr,yr,r)
-
-          xy = numpy.unravel_index(dane.argmax(), dane.shape)
-          dx=x1-xy[1]
-          dy=y1-xy[0]
-          xr=int(xr)-dx
-          yr=int(yr)-dy
-
-          dane,x1,y1 = self.get_local_stamp(xr,yr,r)
-
-          XX,YY = numpy.meshgrid(numpy.arange(dane.shape[1]),numpy.arange(dane.shape[0]))
-          tmp = numpy.vstack((dane.ravel(),XX.ravel(),YY.ravel()))
-          c,xx,yy=tmp[0],tmp[1],tmp[2]
-
-          if numpy.min(c)<0 : waga = (c + numpy.min(c) )**2
-          else: waga = (c - numpy.min(c) )**2
-
-          x0=numpy.sum(waga*xx)/( numpy.sum(waga) )
-          y0=numpy.sum(waga*yy)/( numpy.sum(waga) )
-          dx=float(x1)-x0
-          dy=float(y1)-y0
-          xr=float(xr-dx)
-          yr=float(yr-dy)
-
-
-          d=((xx-x0)**2+(yy-y0)**2)**0.5
-          print(numpy.min(d))
-          mk=d<r
-          c = c[mk]
-          d = d[mk]
-
-          popt,pcov = curve_fit(self.gaus,d,c,p0=[1,2,0])
-
-          xx=numpy.arange(0,d.max(),0.01)
-          yy=self.gaus(xx,popt[0],popt[1],popt[2])
-          amplitude = popt[0]
-          sky = popt[2]
-          sigma=(popt[1]**2)**0.5
-          fwhm=2.355*sigma
-
-          self.r_window.axes.clear()
-          self.r_window.axes.plot(d,c,".g")
-
-          self.r_window.axes.plot(xx,yy)
-          self.r_window.canvas.draw()
-          txt2="%.2f %.2f  %.2f r  "%(xr,yr,fwhm)
-          txt="centered x=%.2f y=%.2f amp=%.1f sky=%.1f FWHM=%.2f   "%(xr,yr,amplitude, sky,fwhm)
-          self.int_x.append(xr)
-          self.int_y.append(yr)
-          self.update()
-          self.text_window.txt=txt
-          self.text_window.update()
-
-          self.r_window.txt=txt
-          self.r_window.update()
-          self.r_window.raise_()
-
-
-          print(txt2)
+        self.key_action(event.key,x,y,xr,yr)
 
         self.update_viewfinder(x,y)
 
-
-    def gaus(self,x,a,sigma,c0):
-       x0=0
-       return a*numpy.exp(-(x-x0)**2/(2*sigma**2))+c0
+    def key_action(self,key,x,y,xr,yr):
+        # klawisze specyficzne dla podklasy (Image: fotometria i FFS)
+        pass
 
     def mkUI(self):
 
@@ -1097,9 +877,10 @@ class Image(QWidget):
        self.min_e= QLineEdit()
        #self.min_e.setReadOnly(True)
 
-       c0 = numpy.median(self.dane,axis=None)
-       c_sigma=numpy.std(self.dane,axis=None)
+       c0 = numpy.nanmedian(self.dane,axis=None)           # nan: mapy (MapTab) moga miec NaN
+       c_sigma=numpy.nanstd(self.dane,axis=None)
        if c_sigma==numpy.inf: c_sigma=5.
+       if not numpy.isfinite(c0 - c_sigma): c0, c_sigma = 0., 1.
        self.min_e.setText("%i"%(c0-5*c_sigma))
        self.max_e.setText("%i"%(c0+5*c_sigma))
        a=self.min_e.text()
@@ -1118,9 +899,7 @@ class Image(QWidget):
        else: self.zoom_s.setRange(int(-0.3*len(self.dane[0])),int(len(self.dane[0])))
        self.zoom_s.setValue(1)
 
-       self.header_p =  QPushButton('Header')
        self.savePic_p =  QPushButton('Save Pic')
-       self.ffs_p =  QPushButton('FFS')
 
 
        # Main image  ---------------------------------------------------------------
@@ -1191,13 +970,18 @@ class Image(QWidget):
        grid.addWidget(self.zoom_s,3,6,1,2)
 
 
-       grid.addWidget(self.header_p,4,6)
-       grid.addWidget(self.fitI_p,4,7)
-       grid.addWidget(self.ffs_p,5,6)
+       grid.addWidget(self.fitI_p,4,7)            # (4,6) Header i (5,6) FFS w Image.mkUI
        grid.addWidget(self.shopt_p,5,7)
 
 
-       self.setLayout(grid)
+       # nad obrazkiem miejsce na ustawienia podklas (MapTab, MaskTab), jak w Catalog
+       self.top_l = QVBoxLayout()
+       grid.setContentsMargins(0,0,0,0)
+       vbox = QVBoxLayout()
+       vbox.addLayout(self.top_l)
+       vbox.addLayout(grid, 1)
+       self.setLayout(vbox)
+       self.grid = grid
        grid.setRowStretch(0,0)
        grid.setRowStretch(1,1)
        grid.setRowStretch(2,1)
@@ -1209,4 +993,288 @@ class Image(QWidget):
        grid.setColumnStretch(4, 0)
        grid.setColumnStretch(5, 0)
        grid.setColumnStretch(6, 0)
+
+
+class Image(ImageView):
+    # obraz z HDU: naglowek, FFS i fotometria (klawisze s, b, q, z, e, r)
+    def __init__(self,parent,hdu,plane=None):
+        self.plane=plane                    # numer plaszczyzny dla danych 3D, None dla zwyklego obrazka
+        if plane is None: dane=hdu.data
+        else: dane=hdu.data[plane]
+        self.hdr=hdu.header
+        ImageView.__init__(self,parent,numpy.nan_to_num(dane, nan=0))
+
+        self.header_p.clicked.connect(self.show_header)
+        self.ffs_p.clicked.connect(self.open_ffs)
+
+    def mkUI(self):
+       ImageView.mkUI(self)
+       self.header_p =  QPushButton('Header')
+       self.ffs_p =  QPushButton('FFS')
+       grid = self.grid
+       grid.addWidget(self.header_p,4,6)
+       grid.addWidget(self.ffs_p,5,6)
+
+    def show_header(self):
+       self.hdrl_window=FitsView_widgets.HeaderTabLocal(self,self.hdr)
+       self.parent.active_windows.append(self.hdrl_window)
+
+    def open_ffs(self):
+        # okno FFS dla widocznego fragmentu obrazu (klawisz 's' lub przycisk FFS)
+        ny, nx = self.dane.shape
+        x1, x2 = sorted(self.axes.get_xlim())     # przy flip X/Y granice osi sa malejace
+        y1, y2 = sorted(self.axes.get_ylim())
+        if self.parent.cfg_rot90:                 # ekran (X,Y) -> oryginal x = nx - 1 - Y, y = X
+            x1, x2, y1, y2 = nx - 1 - y2, nx - 1 - y1, x1, x2
+        x1, x2 = int(max(x1, 0)), int(min(x2, nx))
+        y1, y2 = int(max(y1, 0)), int(min(y2, ny))
+
+        image = self.dane[y1:y2, x1:x2]
+
+        if not self.s_window:
+            self.s_window = FitsView_widgets.FFSWindow(self, image, dx=x1, dy=y1)
+            self.parent.active_windows.append(self.s_window)
+        else:
+            self.s_window.image = image
+            self.s_window.dx = x1
+            self.s_window.dy = y1
+            self.s_window.initFFS()
+
+        self.s_window.show()
+        self.s_window.raise_()
+
+    def key_action(self,key,x,y,xr,yr):
+        if "s" in key:
+            self.int_x.append(xr)
+            self.int_y.append(yr)
+            self.update()
+
+
+            self.open_ffs()
+
+
+          # q34 = (numpy.quantile(dane, 0.83725) - numpy.quantile(dane, 0.16275))/2.
+          #
+          # txt = "selected x=(%.2f,%.2f)  y=(%.2f,%.2f)\n"%(x1,x2,y1,y2)
+          # txt = txt+"min: %.2f\n"%(dane.min())
+          # txt = txt+"max: %.2f\n"%(dane.max())
+          # txt = txt+"mean: %.2f\n"%(numpy.mean(dane))
+          # txt = txt+"median: %.2f\n"%(numpy.median(dane))
+          # txt = txt+"spread: %.2f\n"%(numpy.std(dane))
+          # txt = txt + "sigma_q34: %.2f\n" % (q34)
+          #
+          # self.text_window.txt=txt
+          # self.text_window.update()
+          # print(txt)
+
+
+
+        if "b" in key:
+          r=int(self.parent.cfg_apersize)
+          dane,x0,y0 = self.get_local_stamp(xr,yr,r)
+          XX,YY = numpy.meshgrid(numpy.arange(dane.shape[1]),numpy.arange(dane.shape[0]))
+          tmp = numpy.vstack((dane.ravel(),XX.ravel(),YY.ravel()))
+          c,xx,yy=tmp[0],tmp[1],tmp[2]
+          d=((xx-x0)**2+(yy-y0)**2)**0.5
+          mk=d<r
+          aper = c[mk]
+          bc = aper.sum()/len(aper)
+          self.parent.cfg_bcg=str(bc)
+          txt2=str(xr)+" "+str(yr)+" "+str(bc)+" b"
+          txt="background level around x=%.1f y=%.1f measured: %.2f / pixel "%(xr,yr,bc)
+          self.int_x.append(xr)
+          self.int_y.append(yr)
+          self.update()
+          self.text_window.txt=txt
+          self.text_window.update()
+          print(txt2)
+
+
+        if "q" in key:
+          r=int(self.parent.cfg_apersize)
+          dane,x0,y0 = self.get_local_stamp(xr,yr,r)
+          XX,YY = numpy.meshgrid(numpy.arange(dane.shape[1]),numpy.arange(dane.shape[0]))
+          tmp = numpy.vstack((dane.ravel(),XX.ravel(),YY.ravel()))
+          c,xx,yy=tmp[0],tmp[1],tmp[2]
+          d=((xx-x0)**2+(yy-y0)**2)**0.5
+          mk=d<r
+          aper = c[mk]
+          zliczenia = aper.sum() - len(aper) * float(self.parent.cfg_bcg)
+
+          if zliczenia>0:
+             mag = -2.5*numpy.log10(zliczenia) + float(self.parent.cfg_zp)
+             txt2="%.1f %.1f %d %.2f q "%(xr,yr,zliczenia,mag)
+             txt="centered x=%.1f y=%.1f : counts=%d m=%.2f  "%(xr,yr,zliczenia,mag)
+          else:
+             txt2="%.1f %.1f %d nan q "%(xr,yr,zliczenia)
+             txt="centered x=%.1f y=%.1f : counts=%d  (non-positive net counts, magnitude undefined)"%(xr,yr,zliczenia)
+
+          self.int_x.append(xr)
+          self.int_y.append(yr)
+          self.update()
+          self.text_window.txt=txt
+          self.text_window.update()
+          print(txt2)
+
+        if "z" in key:
+          r=int(self.parent.cfg_apersize)
+          dane,x1,y1 = self.get_local_stamp(xr,yr,r)
+          XX,YY = numpy.meshgrid(numpy.arange(dane.shape[1]),numpy.arange(dane.shape[0]))
+          tmp = numpy.vstack((dane.ravel(),XX.ravel(),YY.ravel()))
+          c,xx,yy=tmp[0],tmp[1],tmp[2]
+
+          x0=numpy.sum(c*xx)/( numpy.sum(c) )
+          y0=numpy.sum(c*yy)/( numpy.sum(c) )
+          xr=xr+(x0-x1)
+          yr=yr+(y0-y1)
+
+          dane,_,_ = self.get_local_stamp(xr,yr,r)
+          XX,YY = numpy.meshgrid(numpy.arange(dane.shape[1]),numpy.arange(dane.shape[0]))
+          tmp = numpy.vstack((dane.ravel(),XX.ravel(),YY.ravel()))
+          c,xx,yy=tmp[0],tmp[1],tmp[2]
+          d=((xx-x0)**2+(yy-y0)**2)**0.5
+          mk=d<r
+          aper = c[mk]
+          zliczenia = aper.sum() - len(aper) * float(self.parent.cfg_bcg)
+
+          if zliczenia<=0:
+             txt="cannot set zero point: non-positive net counts (%d) in aperture - check background level"%(zliczenia)
+             self.text_window.txt=txt
+             self.text_window.update()
+             print(txt)
+          else:
+             mag = -2.5*numpy.log10(zliczenia) + float(self.parent.cfg_zp)
+
+             m_std, ok = QInputDialog.getText(self, 'Zero point', 'Enter star magnitude:')
+             if ok:
+                try: m_std=float(m_std)
+                except ValueError: ok=False
+
+             if ok:
+                d=m_std-mag
+                self.parent.cfg_zp=str(float(self.parent.cfg_zp)+d)
+                txt2="%.3f z"%(float(self.parent.cfg_zp))
+                txt="zero point set to %.3f"%(float(self.parent.cfg_zp))
+
+                self.int_x.append(xr)
+                self.int_y.append(yr)
+                self.update()
+                self.text_window.txt=txt
+                self.text_window.update()
+                print(txt2)
+
+        if "e" in key:
+
+          if not self.e_window:
+             self.e_window=FitsView_widgets.PlotWindow(self)
+             self.parent.active_windows.append(self.e_window)
+
+          self.e_window.show()
+          self.e_window.raise_()
+
+
+          r=int((2*int(self.parent.cfg_apersize)+15)/2.)
+
+          dane,x1,y1 = self.get_local_stamp(xr,yr,r)
+
+          XX,YY = numpy.meshgrid(numpy.arange(dane.shape[1]),numpy.arange(dane.shape[0]))
+          tmp = numpy.vstack((dane.ravel(),XX.ravel(),YY.ravel()))
+          c,xx,yy=tmp[0],tmp[1],tmp[2]
+          c=c-float(self.parent.cfg_bcg)
+
+
+
+
+          self.e_window.axes.clear()
+          self.e_window.axes.contour(dane)
+
+          self.e_window.canvas.draw()
+
+          txt="centered x=%.2f y=%.2f   "%(xr,yr)
+          self.int_x.append(xr)
+          self.int_y.append(yr)
+          self.update()
+          self.text_window.txt=txt
+          self.text_window.update()
+
+          self.e_window.txt=txt
+          self.e_window.update()
+          self.e_window.raise_()
+
+          print(txt)
+
+        if "r" in key:
+
+          if not self.r_window:
+             self.r_window=FitsView_widgets.PlotWindow(self)
+             self.parent.active_windows.append(self.r_window)
+
+          self.r_window.show()
+          self.r_window.raise_()
+
+          r=int(self.parent.cfg_apersize)
+
+          dane,x1,y1 = self.get_local_stamp(xr,yr,r)
+
+          xy = numpy.unravel_index(dane.argmax(), dane.shape)
+          dx=x1-xy[1]
+          dy=y1-xy[0]
+          xr=int(xr)-dx
+          yr=int(yr)-dy
+
+          dane,x1,y1 = self.get_local_stamp(xr,yr,r)
+
+          XX,YY = numpy.meshgrid(numpy.arange(dane.shape[1]),numpy.arange(dane.shape[0]))
+          tmp = numpy.vstack((dane.ravel(),XX.ravel(),YY.ravel()))
+          c,xx,yy=tmp[0],tmp[1],tmp[2]
+
+          if numpy.min(c)<0 : waga = (c + numpy.min(c) )**2
+          else: waga = (c - numpy.min(c) )**2
+
+          x0=numpy.sum(waga*xx)/( numpy.sum(waga) )
+          y0=numpy.sum(waga*yy)/( numpy.sum(waga) )
+          dx=float(x1)-x0
+          dy=float(y1)-y0
+          xr=float(xr-dx)
+          yr=float(yr-dy)
+
+
+          d=((xx-x0)**2+(yy-y0)**2)**0.5
+          print(numpy.min(d))
+          mk=d<r
+          c = c[mk]
+          d = d[mk]
+
+          popt,pcov = curve_fit(self.gaus,d,c,p0=[1,2,0])
+
+          xx=numpy.arange(0,d.max(),0.01)
+          yy=self.gaus(xx,popt[0],popt[1],popt[2])
+          amplitude = popt[0]
+          sky = popt[2]
+          sigma=(popt[1]**2)**0.5
+          fwhm=2.355*sigma
+
+          self.r_window.axes.clear()
+          self.r_window.axes.plot(d,c,".g")
+
+          self.r_window.axes.plot(xx,yy)
+          self.r_window.canvas.draw()
+          txt2="%.2f %.2f  %.2f r  "%(xr,yr,fwhm)
+          txt="centered x=%.2f y=%.2f amp=%.1f sky=%.1f FWHM=%.2f   "%(xr,yr,amplitude, sky,fwhm)
+          self.int_x.append(xr)
+          self.int_y.append(yr)
+          self.update()
+          self.text_window.txt=txt
+          self.text_window.update()
+
+          self.r_window.txt=txt
+          self.r_window.update()
+          self.r_window.raise_()
+
+
+          print(txt2)
+
+    def gaus(self,x,a,sigma,c0):
+       x0=0
+       return a*numpy.exp(-(x-x0)**2/(2*sigma**2))+c0
 
