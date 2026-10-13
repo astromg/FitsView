@@ -293,6 +293,7 @@ class FitsView(QWidget):
         tmp = self.table_data[i]
         tmp["data"] = data
         tmp["selected_index"] = -1
+        tmp["hidden"] = False
 
         old = tmp["tab"]
         tmp["tab"] = FitsView_catalog.Catalog(self, data, data_index=i)
@@ -309,6 +310,7 @@ class FitsView(QWidget):
         tmp = self.map_data[i]
         tmp["data"] = data
         tmp["description"] = description
+        tmp["hidden"] = False
 
         old = tmp["tab"]
         tmp["tab"] = FitsView_maps.MapTab(self, i)
@@ -324,6 +326,7 @@ class FitsView(QWidget):
         tmp = self.mask_data[i]
         tmp["data"] = data
         tmp["description"] = description
+        tmp["hidden"] = False
 
         old = tmp["tab"]
         tmp["tab"] = FitsView_maps.MaskTab(self, i)
@@ -331,6 +334,22 @@ class FitsView(QWidget):
         tmp["tab"].update()
 
         self.update_overlays()
+
+    def hide_tab(self,tab):
+        # zakladka znika, dane zostaja (wpis w table_data / map_data / mask_data oznaczony "hidden",
+        # nie usuwany - zakladki odwoluja sie do list przez data_index); kolumna "shown" w oknie FFS
+        for lista in [self.table_data, self.map_data, self.mask_data]:
+            for tmp in lista:
+                if tmp.get("tab") is tab:
+                    tmp["hidden"] = True
+                    tmp["tab"] = None
+        i = self.TabWindow.indexOf(tab)
+        if i >= 0: self.TabWindow.removeTab(i)
+        if tab in self.tab: self.tab.remove(tab)
+        tab.deleteLater()
+        self.update_overlays()
+        for okno in self.active_windows:           # np. kolumna "shown" w oknie FFS
+            if hasattr(okno, "update_products"): okno.update_products()
 
     def update_overlays(self):
         # punkty, linie i maski na wszystkich obrazach (bez przerysowania samego obrazu)

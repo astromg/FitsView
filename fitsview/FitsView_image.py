@@ -145,7 +145,7 @@ class ImageView(QWidget):
         x1,x2 = self.axes.get_xlim()           # contour/imshow potrafia zmienic zakres osi
         y1,y2 = self.axes.get_ylim()
         for zestaw in self.parent.mask_data:
-            if not zestaw["plot_image"]: continue
+            if not zestaw["plot_image"] or zestaw.get("hidden"): continue
             mk = zestaw["data"]
             if mk.shape != self.dane.shape: continue
             if self.parent.cfg_rot90: mk = numpy.rot90(mk)   # maska w ukladzie oryginalu, jak dane
@@ -208,6 +208,7 @@ class ImageView(QWidget):
             if im is not self.image: im.remove()
 
         for zestaw in self.parent.table_data:
+            if zestaw.get("hidden"): continue           # zakladka schowana (Hide)
 
             if zestaw["plot_image"] and all(k in getattr(zestaw["data"],"colnames",[]) for k in ["x0","y0","x1","y1"]):
                 self.update_segments(zestaw)
@@ -480,6 +481,12 @@ class ImageView(QWidget):
 
        self.canvas_small.draw_idle()
 
+    def view_limits(self):
+        # widoczny fragment (x1, x2, y1, y2) w ukladzie ekranu, rosnaco - jak ustawia go zmiana_zoom
+        x, y, zoom = self.parent.view if self.parent.view is not None else (self.x, self.y, self.zoom_s.value())
+        z = max(int((len(self.dane[0]) - zoom + 1)/2.), 1)
+        return x-z, x+z, y-z, y+z
+
     def update_cfg(self):
 
        self.zoom_s.setValue(int(float(self.parent.cfg_zoom)))
@@ -698,7 +705,7 @@ class ImageView(QWidget):
 
             # DUPA
             for zestaw in self.parent.table_data:
-                if zestaw["plot_image"]:
+                if zestaw["plot_image"] and not zestaw.get("hidden"):
                     if "xcol" in zestaw.keys() and "ycol" in zestaw.keys():
                         xc = zestaw["xcol"]
                         yc = zestaw["ycol"]
@@ -1020,28 +1027,26 @@ class Image(ImageView):
        self.parent.active_windows.append(self.hdrl_window)
 
     def open_ffs(self):
-        # okno FFS dla widocznego fragmentu obrazu (klawisz 's' lub przycisk FFS)
+        # okno FFS (klawisz 's' lub przycisk FFS): przy pierwszym uruchomieniu wycinek z widoku,
+        # potem tylko pokazanie okna; nowy wycinek bierze Reset w oknie FFS (ffs_cut)
+        if not self.s_window:
+            image, x1, y1 = self.ffs_cut()
+            self.s_window = FitsView_widgets.FFSWindow(self, image, dx=x1, dy=y1)
+            self.parent.active_windows.append(self.s_window)
+
+        self.s_window.show()
+        self.s_window.raise_()
+
+    def ffs_cut(self):
+        # widoczny fragment obrazu (ze wspolnego widoku, tez gdy ta zakladka jest ukryta)
+        # -> (wycinek self.dane, x1, y1 jego poczatku w klatce)
         ny, nx = self.dane.shape
-        x1, x2 = sorted(self.axes.get_xlim())     # przy flip X/Y granice osi sa malejace
-        y1, y2 = sorted(self.axes.get_ylim())
+        x1, x2, y1, y2 = self.view_limits()
         if self.parent.cfg_rot90:                 # ekran (X,Y) -> oryginal x = nx - 1 - Y, y = X
             x1, x2, y1, y2 = nx - 1 - y2, nx - 1 - y1, x1, x2
         x1, x2 = int(max(x1, 0)), int(min(x2, nx))
         y1, y2 = int(max(y1, 0)), int(min(y2, ny))
-
-        image = self.dane[y1:y2, x1:x2]
-
-        if not self.s_window:
-            self.s_window = FitsView_widgets.FFSWindow(self, image, dx=x1, dy=y1)
-            self.parent.active_windows.append(self.s_window)
-        else:
-            self.s_window.image = image
-            self.s_window.dx = x1
-            self.s_window.dy = y1
-            self.s_window.initFFS()
-
-        self.s_window.show()
-        self.s_window.raise_()
+        return self.dane[y1:y2, x1:x2], x1, y1
 
     def key_action(self,key,x,y,xr,yr):
         if "s" in key:
