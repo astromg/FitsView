@@ -45,6 +45,30 @@ handler in the image view) comes from `pyaraucaria.ffs`. If `pyaraucaria` is mis
 changes, the FFS-related features (`FitsView_widgets.FFSWindow`) will break independently of this
 codebase.
 
+The pipx install (`fv`, `FitsView`) holds **copies** of both FitsView and pyaraucaria, not the
+sibling checkout — after changing either, `pipx install --force .` (or `pipx reinstall fitsview`)
+before testing with `fv`, or run from source with `PYTHONPATH=.:../pyaraucaria`.
+
+### FFT (Fourier) is FitsView's, not FFS's (2026-11-08)
+FFS (`pyaraucaria.ffs`) is developed by hand by its author and holds only frame statistics, stars,
+lines, masks and maps. Do not add viewer-only features to it. The power spectrum was once added
+to FFS as `FFS.power_spectrum` without agreement and was removed; it now lives in FitsView:
+
+- `FitsView_widgets.power_spectrum(ffs, window=True, min_freq=0.02, exclude=FFS.EXCLUDE_ALL)` — a
+  plain function that only reads the FFS object (`ffs.image`, `ffs.maps["sky"]` if present,
+  `ffs.bad_mask(exclude)`): residual = image − sky, bad pixels set to 0, optional 2D Hann window,
+  `fftshift(fft2)`, power = |F|² / N. Returns `(log10 power, {"period", "angle", "peak"})` — the
+  strongest peak with frequency ≥ `min_freq`: period in px, angle of the wave vector in degrees
+  (stripes are perpendicular), peak / median power (noise ~20, a clear pattern 10³–10⁴).
+- `FFSWindow` keeps the result in `self.fourier` / `self.fft_peak` (cleared by `reset_ffs` and when
+  the product is removed), not on the FFS object. The "Fourier" button and the "FFT" parameter
+  tab work like the FFS stages: the parameter fields come from the function's signature and
+  numpydoc docstring (`mk_params` skips the first argument, here `ffs`).
+- Product type `fft`, tab `ffs.fourier`: the spectrum has the cut-out size but is **not** in image
+  coordinates (offset (dx, dy) from the centre = frequency (dx/nx, dy/ny) cycles/px), so it is shown
+  with `add_map(..., frame=False)` (no `full_frame`; `MapTab.update_points` draws no overlays).
+- Not part of "Run all" and not saved in the MEF (`FFS.save_mef` knows only FFS products).
+
 ## Architecture
 
 The app has no automated entry-point routing beyond `fitsview/fitsview.py:main()`, which parses
@@ -72,7 +96,8 @@ Module breakdown:
 - **`fitsview/FitsView_widgets.py`** — secondary popup windows spawned from `Image`: `TextWindow`
   (short numeric results), `PlotWindow`/`FigureWindow` (profile and isophote plots), `FFSWindow`
   (frame-quality stats UI wrapping `pyaraucaria.ffs.FFS`: find stars, sky gradient check, line
-  detection), and `HeaderTabLocal`.
+  detection; plus FitsView's own `power_spectrum`, see "FFT (Fourier) is FitsView's, not FFS's"),
+  and `HeaderTabLocal`.
 - **`fitsview/FitsView_catalog.py`** — `Catalog` widget (table view of loaded coordinate/photometry
   data via `FitsTableModel`, a `QAbstractTableModel`) and `ColorButton` for per-catalog marker
   coloring; feeds the point overlays drawn in `Image`.

@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 from PyQt5.QtCore import Qt
-from astropy.io.misc.asdf.tags.helpers import skycoord_equal
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
@@ -284,6 +283,58 @@ def tooltip(title, txt):
     return "<b>%s</b><br>%s" % (html.escape(title), html.escape(txt).replace("\n", "<br>"))
 
 
+def power_spectrum(ffs, window=True, min_freq=0.02, exclude=FFS.EXCLUDE_ALL):
+    """2D Fourier power spectrum of the cut-out -> (log10 power, strongest peak).
+
+    Periodic patterns (electronic interference, banding, fringes) show up as isolated peaks.
+    Computed on the residual image - sky (ffs.maps["sky"] if present, otherwise the median of
+    good pixels); pixels in ffs.bad_mask(exclude) are set to 0, so stars and bad pixels do not
+    dominate the spectrum. The spectrum is shifted so that the zero frequency is in the centre
+    (pixel ny//2, nx//2); it has the cut-out size but it is NOT in image coordinates: offset
+    (dx, dy) from the centre is the frequency (dx / nx, dy / ny) cycles/px. The peak is the
+    strongest one with frequency >= min_freq: {"period" px, "angle" deg, "peak" power / median}.
+
+    Parameters
+    ----------
+    window : bool
+        Multiply by a 2D Hann window first; without it the frame edges give a strong
+        cross along the axes of the spectrum.
+    min_freq : float
+        Lowest frequency (cycles/px) searched for the peak; lower ones (periods > 1/min_freq px:
+        sky gradients, large objects) are skipped.
+    exclude : sequence of str
+        Names of the masks whose pixels are set to 0 (bad_mask); missing masks are ignored.
+    """
+    image = ffs.image
+    bad = ffs.bad_mask(exclude) | ~np.isfinite(image)
+    if "sky" in ffs.maps:
+        resid = image - ffs.maps["sky"]
+    else:
+        good = image[~bad]
+        resid = image - (np.median(good) if good.size else 0.)
+    resid = np.where(bad | ~np.isfinite(resid), 0., resid).astype(np.float32)
+    ny, nx = resid.shape
+    if window:
+        resid = resid * np.outer(np.hanning(ny), np.hanning(nx)).astype(np.float32)
+
+    power = np.abs(np.fft.fftshift(np.fft.fft2(resid))) ** 2 / resid.size
+    fourier = np.log10(power + 1e-30)
+
+    # najsilniejszy pik poza niskimi czestosciami (gradienty tla, duze obiekty)
+    fy = (np.arange(ny) - ny // 2) / ny
+    fx = (np.arange(nx) - nx // 2) / nx
+    freq = np.hypot(fy[:, None], fx[None, :])
+    search = freq >= min_freq
+    peak = {"period": np.nan, "angle": np.nan, "peak": np.nan}
+    if search.any():
+        pw = np.where(search, power, -np.inf)
+        iy, ix = np.unravel_index(np.argmax(pw), pw.shape)
+        peak = {"period": 1.0 / freq[iy, ix],
+                "angle": np.degrees(np.arctan2(fy[iy], fx[ix])) % 180.0,
+                "peak": power[iy, ix] / max(np.median(power[search]), 1e-30)}
+    return fourier, peak
+
+
 class FFSWindow(QWidget):
     # Okno FFS dla wycinka obrazu (image, przesuniety o dx, dy w pelnej klatce).
     # Pola parametrow sa budowane z sygnatur metod FFS (wartosci domyslne biblioteki, chyba ze
@@ -300,7 +351,10 @@ class FFSWindow(QWidget):
         "calibration": ("bad_columns", "bad_rows", "hot_pixels", "cold_pixels"),
     }
     # tabele FFS: nazwa produktu -> atrybut obiektu FFS
-    TABLES = {"sky segments": "sky", "lines": "lines", "stars": "stars", "psf grid": "psf_grid"}
+    # maski do wyboru w menu exclude oprocz FFS.EXCLUDE_ALL: przelania ladunku (mk_bleeds_mask) nie sa w zadnej
+    # domyslnej liscie FFS (sa podzbiorem saturacji), ale moze byc potrzeba pominac tylko je
+    EXTRA_EXCLUDE = ("bleeds",)
+    TABLES = {"sky segments": "sky", "bleeds": "bleeds", "lines": "lines", "stars": "stars", "psf grid": "psf_grid"}
     # Run all: kolejnosc jak FFS.calc_frame_fwhm, na koniec tlo i statystyki jeszcze raz, juz z maskami
     RUN_ALL = ["stats", "sky", "cosmics", "lines", "stars", "sky", "stats", "psf"]
 
@@ -329,6 +383,8 @@ class FFSWindow(QWidget):
 
         self.txt = ""
         self.ffs = None
+        self.fourier = None          # widmo mocy wycinka (power_spectrum, funkcja FitsView, nie FFS)
+        self.fft_peak = None
         self.params = {}
         self.products = []           # (typ, nazwa, opis) produktow biezacego obiektu FFS
         self.product_step = {}       # (typ, nazwa) -> krok, w ktorym produkt powstal / zmienil sie
@@ -344,6 +400,20 @@ class FFSWindow(QWidget):
         self.run("stats")
 
     # ------------------------------------------------------------------ liczenie
+
+    def add_exclude_action(self, e, menu, name, checked):
+        a = menu.addAction(name)
+        a.setCheckable(True)
+        a.setChecked(checked)
+        a.setToolTip(self.ffs.masks_description.get(name, "") if self.ffs is not None else "")
+        a.toggled.connect(lambda checked, e=e: self.exclude_text(e))
+
+    def add_mask_actions(self, e):
+        # maski obiektu FFS, ktorych nie ma jeszcze w menu exclude (niezaznaczone)
+        if self.ffs is None: return
+        have = {a.text() for a in e.menu().actions()}
+        for n in self.ffs.masks:
+            if n not in have: self.add_exclude_action(e, e.menu(), n, False)
 
     def exclude_text(self, e):
         e.setText("%d masks" % sum(a.isChecked() for a in e.menu().actions()))
@@ -397,6 +467,7 @@ class FFSWindow(QWidget):
         self.ffs_params = self.get_params("FFS")
         self.ffs = FFS(self.image, **self.ffs_params)
         self.ffs.mk_saturation_mask()
+        self.fourier = self.fft_peak = None
         self.step_n = 0
         self.product_step = {key: "0: new" for key in self.snapshot()}
         self.changed = set(self.product_step)
@@ -408,6 +479,7 @@ class FFSWindow(QWidget):
         out.update({("map", k): v for k, v in ffs.maps.items()})
         for name, attr in self.TABLES.items():
             if getattr(ffs, attr) is not None: out[("table", name)] = getattr(ffs, attr)
+        if self.fourier is not None: out[("fft", "fourier")] = self.fourier
         return out
 
     def step(self, stage):
@@ -416,6 +488,8 @@ class FFSWindow(QWidget):
         for name in self.DROP.get(stage, ()):
             ffs.masks.pop(name, None)
         if stage == "stats":
+            # przelania ladunku z maski saturacji (jak calc_frame_fwhm: zaraz po saturacji, przed statystykami)
+            ffs.mk_bleeds_mask(**self.get_params("mk_bleeds_mask"))
             ffs.mk_stats(**self.get_params("mk_stats"))     # wyniki innych krokow (fwhm, psf_*) zostaja
         if stage == "sky":
             ffs.sky_map(**self.get_params("sky_map"))
@@ -440,6 +514,8 @@ class FFSWindow(QWidget):
                 return
             self.optional(ffs.mk_star_maps, **self.get_params("mk_star_maps"))
             self.optional(ffs.calc_star_field_stats, **self.get_params("calc_star_field_stats"))
+        if stage == "fft":
+            self.fourier, self.fft_peak = power_spectrum(ffs, **self.get_params("power_spectrum"))
         if stage == "calibration":
             ffs.mk_columns_map(**self.get_params("mk_columns_map"))
             ffs.mk_bad_columns_mask(**self.get_params("mk_bad_columns_mask"))
@@ -497,7 +573,10 @@ class FFSWindow(QWidget):
         self.stats_t.setRowCount(len(stats))
         for i, (k, v) in enumerate(stats):
             opis = ffs.stats_description["frame"].get(k, "")
-            txt_v = "%d" % v if isinstance(v, (int, numpy.integer)) else "%.4g" % v    # n_excluded, used_stars
+            if isinstance(v, str):                                  # psf_pattern
+                txt_v = v
+            else:
+                txt_v = "%d" % v if isinstance(v, (int, numpy.integer)) else "%.4g" % v    # n_excluded, used_stars
             for j, txt in enumerate([k, txt_v]):
                 item = QTableWidgetItem(txt)
                 item.setToolTip(tooltip(k, opis))
@@ -507,6 +586,8 @@ class FFSWindow(QWidget):
         self.update_products()
 
         # tabele gwiazd i linii od razu na Image, reszta na zadanie
+        if stage in ("stats", "all") and ffs.bleeds is not None and len(ffs.bleeds):
+            self.show_product("table", "bleeds")
         if stage in ("lines", "all") and ffs.lines is not None:
             self.show_product("table", "lines")
         if stage in ("stars", "all") and ffs.stars is not None:
@@ -514,6 +595,12 @@ class FFSWindow(QWidget):
         if stage in ("stars", "all") and "fwhm" in ffs.stats["frame"]:
             self.pole_e.append("frame_fwhm: %.2f  ellipticity: %.2f  used_stars: %d" % (
                 ffs.stats["frame"]["fwhm"], ffs.stats["frame"]["ellipticity"], ffs.stats["frame"]["used_stars"]))
+
+        if stage == "fft" and self.fourier is not None:
+            self.show_product("fft", "fourier")
+            pk = self.fft_peak
+            self.pole_e.append("fft peak: period %.2f px  angle %.1f deg  peak/median %.3g" % (
+                pk["period"], pk["angle"], pk["peak"]))
 
         # widoczne zakladki produktow zmienionych w tym run() - odswiezamy (schowane zostaja schowane)
         for typ, name, opis in self.products:
@@ -527,8 +614,10 @@ class FFSWindow(QWidget):
         for k in ffs.masks: self.products.append(("mask", k, ffs.masks_description.get(k, "")))
         for k in ffs.maps: self.products.append(("map", k, ffs.maps_description.get(k, "")))
         if ffs.sky is not None: self.products.append(("table", "sky segments", "Sky segments: centres and fitted background (sky_gradient)"))
+        if ffs.bleeds is not None: self.products.append(("table", "bleeds", "Charge bleeds: saturated runs along a row or column, drawn as segments (mk_bleeds_mask)"))
         if ffs.lines is not None: self.products.append(("table", "lines", "Detected lines (find_lines, classify_lines)"))
         if ffs.stars is not None: self.products.append(("table", "stars", "Detected stars; not measured have NaN (find_stars, star_info)"))
+        if self.fourier is not None: self.products.append(("fft", "fourier", "log10 power spectrum of the cut-out; zero frequency in the centre, offset (dx, dy) = frequency (dx/nx, dy/ny) cycles/px - not image coordinates (power_spectrum)"))
         if ffs.psf_grid is not None: self.products.append(("table", "psf grid", "PSF on a grid, drawn as whiskers: direction theta, length ~ ellipticity, the longest 0.9 of a cell (mk_star_maps)"))
 
         self.products_t.blockSignals(True)
@@ -549,7 +638,7 @@ class FFSWindow(QWidget):
     def gui_entry(self, typ, name):
         # wpis produktu w table_data / map_data / mask_data glownego okna, albo None
         gui = self.parent.parent
-        lista = {"mask": gui.mask_data, "map": gui.map_data, "table": gui.table_data}[typ]
+        lista = {"mask": gui.mask_data, "map": gui.map_data, "fft": gui.map_data, "table": gui.table_data}[typ]
         i = gui.find_data(lista, self.tab_name(typ, name))
         return None if i is None else lista[i]
 
@@ -576,6 +665,7 @@ class FFSWindow(QWidget):
             self.hide_product(typ, name)
             if typ == "mask": self.ffs.masks.pop(name, None)
             elif typ == "map": self.ffs.maps.pop(name, None)
+            elif typ == "fft": self.fourier = self.fft_peak = None
             else: setattr(self.ffs, self.TABLES[name], None)
             self.product_step.pop((typ, name), None)
             names.append("%s %s" % (name, typ))
@@ -584,7 +674,7 @@ class FFSWindow(QWidget):
 
     def tab_name(self, typ, name):
         # np. maska "lines" i tabela "lines" musza miec rozne zakladki
-        if typ == "table": return "ffs." + name
+        if typ in ("table", "fft"): return "ffs." + name
         return "ffs.%s %s" % (name, typ)
 
     def show_product(self, typ, name):
@@ -594,8 +684,12 @@ class FFSWindow(QWidget):
             gui.add_mask(self.full_frame(ffs.masks[name], False), name=self.tab_name(typ, name), description=ffs.masks_description.get(name, ""))
         elif typ == "map":
             gui.add_map(self.full_frame(ffs.maps[name], numpy.nan), name=self.tab_name(typ, name), description=ffs.maps_description.get(name, ""))
+        elif typ == "fft":
+            # widmo w rozmiarze wycinka, nie w ukladzie klatki - bez full_frame
+            desc = [d for t, n, d in self.products if t == typ and n == name]
+            gui.add_map(self.fourier, name=self.tab_name(typ, name), description=desc[0] if desc else "", frame=False)
         elif typ == "table":
-            table = {"sky segments": ffs.sky, "lines": ffs.lines, "stars": ffs.stars, "psf grid": ffs.psf_grid}[name]
+            table = getattr(ffs, self.TABLES[name])
             if name == "psf grid": table = self.whiskers(table)
             gui.add_coo(self.shift_table(table), name=self.tab_name(typ, name))
         self.update_products()
@@ -641,11 +735,12 @@ class FFSWindow(QWidget):
                 e = QToolButton()
                 e.setPopupMode(QToolButton.InstantPopup)
                 menu = QMenu(e)
-                for n in FFS.EXCLUDE_ALL:
-                    a = menu.addAction(n)
-                    a.setCheckable(True)
-                    a.setChecked(n in default)
-                    a.toggled.connect(lambda checked, e=e: self.exclude_text(e))
+                menu.setToolTipsVisible(True)             # opis maski (masks_description) w podpowiedzi
+                # zle piksele i zrodla (FFS.EXCLUDE_ALL), przelania ladunku i domyslne spoza tej listy;
+                # inne maski obiektu FFS (np. wczytane z zewnatrz) dochodza przy otwarciu menu
+                for n in dict.fromkeys(FFS.EXCLUDE_ALL + self.EXTRA_EXCLUDE + tuple(default)):
+                    self.add_exclude_action(e, menu, n, n in default)
+                menu.aboutToShow.connect(lambda e=e: self.add_mask_actions(e))
                 e.setMenu(menu)
                 self.exclude_text(e)
                 opis = opis + "\nDefault: " + ", ".join(default)
@@ -693,12 +788,13 @@ class FFSWindow(QWidget):
         self.info_l = QLabel()
 
 
-        frame = [FFS.__init__, FFS.mk_stats]
+        frame = [FFS.__init__, FFS.mk_bleeds_mask, FFS.mk_stats]
         sky = [FFS.sky_map]
         cosmics = [FFS.mk_cosmics_mask]
         lines = [FFS.mk_threshold_mask, FFS.find_lines, FFS.classify_lines]
         stars = [FFS.find_stars, FFS.star_info, FFS.calc_star_stats, FFS.mk_stars_mask]
         psf = [FFS.mk_star_maps, FFS.calc_star_field_stats]
+        fft = [power_spectrum]
         calib = [FFS.mk_columns_map, FFS.mk_bad_columns_mask, FFS.mk_pixels_map, FFS.mk_hot_pixels_mask, FFS.mk_cold_pixels_mask]
 
         self.params_t = QTabWidget()
@@ -709,6 +805,7 @@ class FFSWindow(QWidget):
         self.params_t.addTab(self.mk_page(stars), "Stars")
         self.params_t.addTab(self.mk_page(psf), "PSF")
         self.params_t.addTab(self.mk_page(calib), "Calib.")
+        self.params_t.addTab(self.mk_page(fft), "FFT")
         self.params_t.setTabToolTip(0, tooltip("FFS", doc_summary(FFS)))
 
         # kazdy przycisk to jeden krok na biezacym obiekcie FFS (uzywa masek z poprzednich krokow)
@@ -725,6 +822,7 @@ class FFSWindow(QWidget):
                                    "\n\nThe last sky and stats use all masks (cosmics, lines, spikes, stars)."))
         run_all.clicked.connect(lambda: self.run("all"))
         buttons.addWidget(run_all, 2, 1)
+        buttons.addWidget(self.mk_button("Fourier", fft, "fft"), 2, 2)
         reset = QPushButton("Reset")
         reset.setToolTip(tooltip("Reset", "New cut-out from the current view of the image and new FFS: "
                                  "all masks and maps are dropped, then Statistics."))

@@ -167,13 +167,16 @@ class ImageView(QWidget):
         self.canvas.draw_idle()
 
     def update_segments(self,zestaw):
-        # tabela z odcinkami (kolumny x0, y0, x1, y1, np. ffs.lines); spike == True rysowane przerywana linia
+        # tabela z odcinkami (kolumny x0, y0, x1, y1, np. ffs.lines); spike == True rysowane przerywana linia,
+        # bleed == True (linia na poziomie saturacji - przelanie ladunku, classify_lines) kropkowana
         dane = zestaw["data"]
         x0,y0 = self.to_screen(numpy.array(dane["x0"]),numpy.array(dane["y0"]))
         x1,y1 = self.to_screen(numpy.array(dane["x1"]),numpy.array(dane["y1"]))
         segments = [[(a,b),(c,d)] for a,b,c,d in zip(x0,y0,x1,y1)]
-        if "spike" in dane.colnames: style = ["--" if s else "-" for s in dane["spike"]]
-        else: style = "-"
+        n_seg = len(segments)
+        spike = numpy.asarray(dane["spike"], dtype=bool) if "spike" in dane.colnames else numpy.zeros(n_seg, bool)
+        bleed = numpy.asarray(dane["bleed"], dtype=bool) if "bleed" in dane.colnames else numpy.zeros(n_seg, bool)
+        style = [":" if b else "--" if s else "-" for s, b in zip(spike, bleed)] or "-"
         color = zestaw["marker_color"] if "marker_color" in zestaw.keys() else "r"
         self.axes.add_collection(LineCollection(segments,colors=color,linestyles=style,linewidths=1.5),autolim=False)
         n = zestaw["selected_index"]

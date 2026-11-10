@@ -38,6 +38,10 @@ class MapTab(FitsView_image.ImageView):
     def get_cmap(self):
         return matplotlib.colormaps[self.cmap_s.currentText()]
 
+    def update_points(self):
+        if self.zestaw().get("frame", True):
+            FitsView_image.ImageView.update_points(self)
+
     def zmiana_cmap(self):
         self.update()                          # cmap tylko tej mapy, bez zmiany konfiguracji
 

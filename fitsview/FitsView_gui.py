@@ -302,7 +302,8 @@ class FitsView(QWidget):
 
         self.update_tabs()
 
-    def add_map(self,data,name="map",description=""):
+    def add_map(self,data,name="map",description="",frame=True):
+        # frame=False: dane nie w ukladzie klatki (np. widmo Fouriera) - bez markerow i masek na zakladce
         i = self.find_data(self.map_data,name)
         if i is None:
             self.map_data.append({"name": name, "tab": None})
@@ -311,6 +312,7 @@ class FitsView(QWidget):
         tmp["data"] = data
         tmp["description"] = description
         tmp["hidden"] = False
+        tmp["frame"] = frame
 
         old = tmp["tab"]
         tmp["tab"] = FitsView_maps.MapTab(self, i)
