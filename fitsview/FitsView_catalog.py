@@ -12,12 +12,11 @@ from astropy.table import Table
 
 from fitsview import FitsView_widgets
 
-from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QLabel, QCheckBox, QTextEdit, QMessageBox, QLineEdit, \
+from fitsview.PyQtX.QtWidgets import QMainWindow, QApplication, QWidget, QLabel, QCheckBox, QTextEdit, QMessageBox, QLineEdit, \
     QDialog, QTabWidget, QPushButton, QFileDialog, QGridLayout, QHBoxLayout, QVBoxLayout, QInputDialog, QComboBox, \
-    QSlider, QTableView, QSpinBox, QColorDialog
-from PyQt5 import QtCore, QtGui
+    QSlider, QTableView, QSpinBox, QColorDialog, QAbstractItemView
 
-from PyQt5.QtCore import QAbstractTableModel, Qt, QModelIndex, QItemSelectionModel
+from fitsview.PyQtX.QtCore import QAbstractTableModel, Qt, QModelIndex, QItemSelectionModel
 
 
 class Catalog(QWidget):
@@ -103,7 +102,7 @@ class Catalog(QWidget):
         index = model.index(row, 0)
         selection_model = self.data_t.selectionModel()
         if row >= 0:
-            selection_model.select(index, QItemSelectionModel.ClearAndSelect | QItemSelectionModel.Rows)
+            selection_model.select(index, QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows)
             self.data_t.scrollTo(index)
         else:
             selection_model.clearSelection()
@@ -119,7 +118,7 @@ class Catalog(QWidget):
         self.update_data()
 
     def update_data(self):
-        self.parent.table_data[self.data_index]["plot_image"] = self.plot_c.checkState()
+        self.parent.table_data[self.data_index]["plot_image"] = self.plot_c.isChecked()
 
         self.parent.table_data[self.data_index]["xcol"] = self.xcol_s.currentText()
         self.parent.table_data[self.data_index]["ycol"] = self.ycol_s.currentText()
@@ -141,8 +140,8 @@ class Catalog(QWidget):
 
     def mkUI(self):
         self.data_t = QTableView(self)
-        self.data_t.setSelectionBehavior(QTableView.SelectRows)
-        self.data_t.setSelectionMode(QTableView.SingleSelection)
+        self.data_t.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.data_t.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.data_t.setStyleSheet("""QTableView::item:selected {background-color: #5db0ad;color: black;}""")
 
         self.data_t.clicked.connect(self.on_row_clicked)
@@ -226,21 +225,21 @@ class FitsTableModel(QAbstractTableModel):
     def columnCount(self, parent=QModelIndex()):
         return len(self.columns)
 
-    def data(self, index, role=Qt.DisplayRole):
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
         if not index.isValid():
             return None
 
-        if role == Qt.DisplayRole:
+        if role == Qt.ItemDataRole.DisplayRole:
             value = self.table[self.columns[index.column()]][index.row()]
             return str(value)
 
         return None
 
-    def headerData(self, section, orientation, role=Qt.DisplayRole):
-        if role != Qt.DisplayRole:
+    def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
+        if role != Qt.ItemDataRole.DisplayRole:
             return None
 
-        if orientation == Qt.Horizontal:
+        if orientation == Qt.Orientation.Horizontal:
             return self.columns[section]
         else:
             return str(section)

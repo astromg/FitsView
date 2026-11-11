@@ -6,6 +6,12 @@
 #----------------
 
 import time
+import threading
+
+# PyQtX przed matplotlib: backend_qtagg bierze juz zaimportowane PyQt6
+from fitsview.PyQtX.QtWidgets import QMainWindow, QApplication, QWidget, QMessageBox, QLabel,QCheckBox, QComboBox, QTextEdit, QLineEdit, QDialog, QTabWidget, QPushButton, QFileDialog, QGridLayout, QHBoxLayout, QVBoxLayout, QMessageBox
+from fitsview.PyQtX import QtCore, QtGui
+from fitsview.PyQtX.QtCore import Qt
 
 import os,sys
 import warnings
@@ -18,14 +24,13 @@ from astropy.utils.exceptions import AstropyWarning
 from astropy.table import Table
 
 from matplotlib.figure import Figure
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 
-from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QMessageBox, QLabel,QCheckBox, QComboBox, QTextEdit, QLineEdit, QDialog, QTabWidget, QPushButton, QFileDialog, QGridLayout, QHBoxLayout, QVBoxLayout, QMessageBox
-from PyQt5 import QtCore, QtGui
 
 from fitsview import FitsView_image, FitsView_catalog, FitsView_maps
 from fitsview.fv_lib import daophot_files_parser
+from fitsview.fv_windows import place_window, fit_to_screen
 
 warnings.simplefilter('ignore', category=AstropyWarning)
 
@@ -52,6 +57,7 @@ class FitsView(QWidget):
         gm=eval(self.cfg_geometry)
         #self.setGeometry(gm[0],gm[1],800,750)          # Jak sie ustawi size okna zle to wypieprza caly program
         self.setGeometry(gm[0],gm[1],gm[2],gm[3])
+        fit_to_screen(self)                      # geometria zapisana na wiekszym monitorze
         self.show()
         self.raise_()
         self.com=Communicate()
@@ -74,6 +80,9 @@ class FitsView(QWidget):
         self.map_data = []       # mapy (np. z FFS), kazda z wlasna zakladka MapTab
         self.mask_data = []      # maski (np. z FFS), zakladki MaskTab, rysowane na Image
 
+        self.browse_step = 1     # kierunek przegladania strzalkami (prefetch)
+        self.prefetch_gen = 0
+
         self.color_cycle = cycle([
             "#1f77b4",  # blue
             "#ff7f0e",  # orange
@@ -83,8 +92,33 @@ class FitsView(QWidget):
             "#8c564b",  # brown
         ])
 
+    def fits_list(self):
+        return sorted([f for f in os.listdir(self.fits_directory) if ".fits" in f])
+
+    def prefetch(self):
+        # Nastepny plik w kierunku przegladania (strzalki) czytany w tle - trafia do pamieci podrecznej
+        # systemu i potem otwiera sie od razu. Klatka jk15 (67 MB) z /data/fits po NFS przez wifi to ~3.5 s
+        # samego czytania, a obrobka w FitsView ~1 s. Watek konczy sie, gdy wczytywany jest inny plik.
+        self.prefetch_gen = self.prefetch_gen + 1
+        gen = self.prefetch_gen
+        try:
+            lista = self.fits_list()
+            i = lista.index(os.path.basename(str(self.fname))) + self.browse_step
+        except (OSError, ValueError):
+            return
+        if not 0 <= i < len(lista): return
+        path = os.path.join(self.fits_directory, lista[i])
+        def czytaj():
+            try:
+                with open(path, "rb") as f:
+                    while gen == self.prefetch_gen and f.read(8 << 20): pass
+            except OSError:
+                pass
+        threading.Thread(target=czytaj, daemon=True).start()
+
     def nextFits(self):
-        lista = sorted([f for f in os.listdir(self.fits_directory) if ".fits" in f])
+        self.browse_step = 1
+        lista = self.fits_list()
         fname = str(os.path.basename(self.fname))
         if fname in lista:
             i = lista.index(fname)
@@ -96,7 +130,8 @@ class FitsView(QWidget):
 
 
     def prevFits(self):
-        lista = sorted([f for f in os.listdir(self.fits_directory) if ".fits" in f])
+        self.browse_step = -1
+        lista = self.fits_list()
         fname = str(os.path.basename(self.fname))
         if fname in lista:
             i = lista.index(fname)
@@ -110,6 +145,10 @@ class FitsView(QWidget):
 
        if ".fits" in self.fname:
 
+          self.prefetch_gen = self.prefetch_gen + 1      # przerywa czytanie w tle innego pliku
+          QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+          self.setWindowTitle("loading " + os.path.basename(self.fname) + " ...")
+          QApplication.processEvents()
           self.TabWindow.clear()
 
           self.coo_file=None
@@ -123,15 +162,19 @@ class FitsView(QWidget):
           self.view=None
 
 
-          self.getFits()
-          self.updateUI()
-          self.TabWindow.setCurrentIndex(self.current_tab_n)
-          #self.TabWindow.setCurrentIndex(int(self.cfg_active_tab))
-          self.updateCooList()
+          try:
+             self.getFits()
+             self.updateUI()
+             self.TabWindow.setCurrentIndex(self.current_tab_n)
+             #self.TabWindow.setCurrentIndex(int(self.cfg_active_tab))
+             self.updateCooList()
+          finally:
+             QApplication.restoreOverrideCursor()
+          self.prefetch()
        else:
           self.msg = QMessageBox()
           self.msg.setText(self.fname.split("/")[-1] + " is not a FITS file")
-          self.msg.exec_()
+          self.msg.exec()
 
     def updateCooList(self):
        basename=self.fname.replace(".fits","").split("/")[-1]
@@ -157,8 +200,7 @@ class FitsView(QWidget):
           self.cfg_zoomY = self.tab[i].y
        except: print("EXCEPTION 003")
 
-       gm=eval(str(self.cfg_geometry))
-       self.cfg_window.setGeometry(gm[1]+600,gm[2]+100,400,500)
+       place_window(self.cfg_window, self, 400, 500)
        self.cfg_window.show()
        self.cfg_window.update()
 
@@ -183,6 +225,9 @@ class FitsView(QWidget):
 
        self.hinfo_e=QTextEdit()
        self.hinfo_e.setReadOnly(True)
+       self.hinfo_e.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)     # waskie okno: obciete z prawej, nie zawijane (3. linia uciekala)
+       self.hinfo_e.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+       self.hinfo_e.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
        # 3 linie naglowka (updateHInfo); wczesniej pole zachodzilo na zakladki
        linia = QtGui.QFontMetrics(QtGui.QFont("Courier New")).lineSpacing()
        self.hinfo_e.setFixedHeight(3*linia + 2*self.hinfo_e.frameWidth() + int(2*self.hinfo_e.document().documentMargin()) + 2)
@@ -448,7 +493,7 @@ class FitsView(QWidget):
             #          self.ext_x,self.ext_y,self.ext_l=[],[],[]
             #          self.msg = QMessageBox()
             #          self.msg.setText("Wrong column definition in COO file.\nCheck configuration!")
-            #          self.msg.exec_()
+            #          self.msg.exec()
             # self.coo_p.setStyleSheet("")
             # self.coo_p.repaint()      # trzeba to tu bo na mac os czasem sie nie updatuje
 
@@ -468,9 +513,9 @@ class FitsView(QWidget):
        for x in self.cfg_hdr_keywords[0]:
            try: tmp=str(hdu[x])
            except: pass
-       self.hinfo_e.setTextColor(QtCore.Qt.black)
+       self.hinfo_e.setTextColor(Qt.GlobalColor.black)
        self.hinfo_e.insertPlainText(txt.ljust(10))
-       self.hinfo_e.setTextColor(QtCore.Qt.darkRed)
+       self.hinfo_e.setTextColor(Qt.GlobalColor.darkRed)
        self.hinfo_e.insertPlainText(tmp.ljust(20))
 
        txt=self.cfg_hdr_keywords[3][0]
@@ -478,9 +523,9 @@ class FitsView(QWidget):
        for x in self.cfg_hdr_keywords[3]:
            try: tmp=str(hdu[x])
            except: pass
-       self.hinfo_e.setTextColor(QtCore.Qt.black)
+       self.hinfo_e.setTextColor(Qt.GlobalColor.black)
        self.hinfo_e.insertPlainText(txt.ljust(15))
-       self.hinfo_e.setTextColor(QtCore.Qt.darkRed)
+       self.hinfo_e.setTextColor(Qt.GlobalColor.darkRed)
        self.hinfo_e.insertPlainText(tmp.ljust(15))
 
        txt=self.cfg_hdr_keywords[6][0]
@@ -488,9 +533,9 @@ class FitsView(QWidget):
        for x in self.cfg_hdr_keywords[6]:
            try: tmp=str(hdu[x])
            except: pass
-       self.hinfo_e.setTextColor(QtCore.Qt.black)
+       self.hinfo_e.setTextColor(Qt.GlobalColor.black)
        self.hinfo_e.insertPlainText(txt.ljust(10))
-       self.hinfo_e.setTextColor(QtCore.Qt.darkRed)
+       self.hinfo_e.setTextColor(Qt.GlobalColor.darkRed)
        self.hinfo_e.insertPlainText(tmp)
 
        self.hinfo_e.insertPlainText("\n")
@@ -501,9 +546,9 @@ class FitsView(QWidget):
        for x in self.cfg_hdr_keywords[1]:
            try: tmp=str(hdu[x])
            except: pass
-       self.hinfo_e.setTextColor(QtCore.Qt.black)
+       self.hinfo_e.setTextColor(Qt.GlobalColor.black)
        self.hinfo_e.insertPlainText(txt.ljust(10))
-       self.hinfo_e.setTextColor(QtCore.Qt.darkRed)
+       self.hinfo_e.setTextColor(Qt.GlobalColor.darkRed)
        self.hinfo_e.insertPlainText(tmp.ljust(20))
 
        txt=self.cfg_hdr_keywords[4][0]
@@ -511,9 +556,9 @@ class FitsView(QWidget):
        for x in self.cfg_hdr_keywords[4]:
            try: tmp=str(hdu[x])
            except: pass
-       self.hinfo_e.setTextColor(QtCore.Qt.black)
+       self.hinfo_e.setTextColor(Qt.GlobalColor.black)
        self.hinfo_e.insertPlainText(txt.ljust(15))
-       self.hinfo_e.setTextColor(QtCore.Qt.darkRed)
+       self.hinfo_e.setTextColor(Qt.GlobalColor.darkRed)
        self.hinfo_e.insertPlainText(tmp.ljust(15))
 
        txt=self.cfg_hdr_keywords[7][0]
@@ -521,9 +566,9 @@ class FitsView(QWidget):
        for x in self.cfg_hdr_keywords[7]:
            try: tmp=str(hdu[x])
            except: pass
-       self.hinfo_e.setTextColor(QtCore.Qt.black)
+       self.hinfo_e.setTextColor(Qt.GlobalColor.black)
        self.hinfo_e.insertPlainText(txt.ljust(10))
-       self.hinfo_e.setTextColor(QtCore.Qt.darkRed)
+       self.hinfo_e.setTextColor(Qt.GlobalColor.darkRed)
        self.hinfo_e.insertPlainText(tmp)
 
        self.hinfo_e.insertPlainText("\n")
@@ -535,9 +580,9 @@ class FitsView(QWidget):
        for x in self.cfg_hdr_keywords[2]:
            try: tmp=str(hdu[x])
            except: pass
-       self.hinfo_e.setTextColor(QtCore.Qt.black)
+       self.hinfo_e.setTextColor(Qt.GlobalColor.black)
        self.hinfo_e.insertPlainText(txt.ljust(10))
-       self.hinfo_e.setTextColor(QtCore.Qt.darkRed)
+       self.hinfo_e.setTextColor(Qt.GlobalColor.darkRed)
        self.hinfo_e.insertPlainText(tmp.ljust(20))
 
        txt=self.cfg_hdr_keywords[5][0]
@@ -545,9 +590,9 @@ class FitsView(QWidget):
        for x in self.cfg_hdr_keywords[5]:
            try: tmp=str(hdu[x])
            except: pass
-       self.hinfo_e.setTextColor(QtCore.Qt.black)
+       self.hinfo_e.setTextColor(Qt.GlobalColor.black)
        self.hinfo_e.insertPlainText(txt.ljust(15))
-       self.hinfo_e.setTextColor(QtCore.Qt.darkRed)
+       self.hinfo_e.setTextColor(Qt.GlobalColor.darkRed)
        self.hinfo_e.insertPlainText(tmp.ljust(15))
 
        txt=self.cfg_hdr_keywords[8][0]
@@ -555,9 +600,9 @@ class FitsView(QWidget):
        for x in self.cfg_hdr_keywords[8]:
            try: tmp=str(hdu[x])
            except: pass
-       self.hinfo_e.setTextColor(QtCore.Qt.black)
+       self.hinfo_e.setTextColor(Qt.GlobalColor.black)
        self.hinfo_e.insertPlainText(txt.ljust(10))
-       self.hinfo_e.setTextColor(QtCore.Qt.darkRed)
+       self.hinfo_e.setTextColor(Qt.GlobalColor.darkRed)
        self.hinfo_e.insertPlainText(tmp)
 
 
@@ -571,7 +616,7 @@ class FitsView(QWidget):
     def errmssg(self,txt):
        self.msg = QMessageBox()
        self.msg.setText(txt)
-       self.msg.exec_()
+       self.msg.exec()
 
     def planeName(self,p):                # nazwa zakladki dla plaszczyzny danych 3D
        if p is None: return "IMAGE"
@@ -952,8 +997,7 @@ class HelpWindow(QDialog):
       vbox.addLayout(hbox2)
       self.setLayout(vbox)
 
-      gm=eval(str(self.parent.cfg_geometry))
-      self.setGeometry(int(gm[1])+60,int(gm[1]+10),600,600)
+      place_window(self, self.parent, 600, 600)
 
 
       try: f=open(plik,"r")
@@ -979,7 +1023,7 @@ class HelpWindow(QDialog):
            f=open(plik,"r")
 
       self.text=f.read()
-      self.pole.setReadOnly(1)
+      self.pole.setReadOnly(True)
     #      self.pole.setLineWrapMode(0)
       self.pole.setText(self.text)
       #self.pole.setMarkdown(self.text)
@@ -1115,13 +1159,13 @@ class Settings(QWidget):   # DEFINCE CONFIG
        chx1,chx2,chx3=False,False,False
        txt=""
 
-       if self.geometry_c.checkState():
+       if self.geometry_c.isChecked():
           chx1=True
           self.parent.cfg_geometry=self.parent.geometry().getRect()
           txt=txt+"geometry="+str(self.parent.cfg_geometry)+"\n"
           txt=txt+"active_tab="+str(self.parent.cfg_active_tab)+"\n"
 
-       if self.display_c.checkState():
+       if self.display_c.isChecked():
           chx2=True
           txt=txt+"flip_X="+str(self.parent.cfg_flipX)+"\n"
           txt=txt+"flip_Y="+str(self.parent.cfg_flipY)+"\n"
@@ -1131,7 +1175,7 @@ class Settings(QWidget):   # DEFINCE CONFIG
           txt=txt+"saturation="+str(self.parent.cfg_saturation)+"\n"
 
 
-       if self.zoom_c.checkState():
+       if self.zoom_c.isChecked():
           chx3=True
           txt=txt+"zoom_Z="+str(self.parent.cfg_zoom)+"\n"
           txt=txt+"zoom_X="+str(self.parent.cfg_zoomX)+"\n"

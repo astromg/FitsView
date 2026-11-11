@@ -5,7 +5,7 @@ Python Fits Viewer - **FitsView**
 **Marek Gorski** 
 
 ### Reguirements:
-*python3, PyQt5, astropy, numpy, matplotlib, scipy*  
+*python3, PyQt6 (PyQt5 still works), astropy, numpy, matplotlib, scipy*  
 
 ### Run:
 
@@ -104,7 +104,7 @@ Astropy
 NumPy  
 SciPy  
 matplotlib  
-PyQt5
+PyQt6 (through `fitsview/PyQtX`, falls back to PyQt5)
 
 #### Issues & ToDo:
 

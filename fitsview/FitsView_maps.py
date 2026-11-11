@@ -7,7 +7,7 @@
 
 import matplotlib, numpy
 
-from PyQt5.QtWidgets import QLabel, QCheckBox, QComboBox, QHBoxLayout
+from fitsview.PyQtX.QtWidgets import QLabel, QCheckBox, QComboBox, QHBoxLayout
 
 from fitsview import FitsView_image
 from fitsview.FitsView_catalog import ColorButton
@@ -46,7 +46,8 @@ class MapTab(FitsView_image.ImageView):
         self.update()                          # cmap tylko tej mapy, bez zmiany konfiguracji
 
     def clim_auto(self):
-        dane = self.dane[numpy.isfinite(self.dane)]
+        dane = FitsView_image.sample(self.dane)
+        dane = dane[numpy.isfinite(dane)]
         if dane.size == 0: dane = numpy.array([0., 1.])
         a, b = numpy.percentile(dane, [0.5, 99.5])
         a, b = int(numpy.floor(a)), int(numpy.ceil(b))

@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 
+# PyQtX przed matplotlib: backend_qtagg bierze juz zaimportowane PyQt6
+from fitsview.PyQtX.QtWidgets import QMainWindow, QApplication, QWidget, QLabel,QCheckBox, QTextEdit, QMessageBox, QLineEdit, QDialog, QTabWidget, QPushButton, QFileDialog, QGridLayout, QHBoxLayout, QVBoxLayout, QInputDialog,QComboBox, QSlider
+from fitsview.PyQtX import QtCore, QtGui
+from fitsview.PyQtX.QtCore import Qt
+
 import matplotlib.pyplot as plt
 import matplotlib, numpy
 import matplotlib.patches as patches
@@ -10,15 +15,20 @@ from matplotlib.colors import ListedColormap
 from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
 
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 
 from scipy.optimize import curve_fit
 
-from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QLabel,QCheckBox, QTextEdit, QMessageBox, QLineEdit, QDialog, QTabWidget, QPushButton, QFileDialog, QGridLayout, QHBoxLayout, QVBoxLayout, QInputDialog,QComboBox, QSlider
-from PyQt5 import QtCore, QtGui
 
 from fitsview import FitsView_widgets
+
+
+def sample(dane, n=1000000):
+    # co k-ty piksel w obu osiach (~n pikseli) do statystyk zakresu kolorow: mediana i std calej
+    # klatki 4k to ~0.15 s (liczone dwa razy przy kazdym wczytaniu), na probce ~0.01 s
+    k = max(1, int(numpy.sqrt(dane.size / n)))
+    return dane[::k, ::k]
 
 
 class ImageView(QWidget):
@@ -89,7 +99,7 @@ class ImageView(QWidget):
         self.cmap_s.setCurrentIndex(index)
 
     def zmiana_saturation(self):
-        if self.saturation_c.checkState(): self.parent.cfg_showsat=True
+        if self.saturation_c.isChecked(): self.parent.cfg_showsat=True
         else: self.parent.cfg_showsat=False
         try: self.parent.cfg_saturation=float(self.saturation_e.text())
         except:
@@ -324,7 +334,7 @@ class ImageView(QWidget):
 
         mymap = self.get_cmap()
 
-        dane2=dane.copy()
+        dane2=dane                               # bez kopii (64 MB dla 4k); imshow danych nie zmienia
 
         #if self.parent.cfg_showsat:
         #   sat = float(self.parent.cfg_saturation)
@@ -346,7 +356,7 @@ class ImageView(QWidget):
         self.ext_y=self.parent.ext_y
 
 
-        if self.showM_c.checkState():
+        if self.showM_c.isChecked():
           mksize=int(self.mksize_s.value()/10.)+1
           if len(self.ext_x)>0:
              try:
@@ -356,7 +366,7 @@ class ImageView(QWidget):
              except ValueError:
                 self.msg = QMessageBox()
                 self.msg.setText("'"+self.parent.cfg_extMarker.strip()+"'"+ " is not a proper marker style\nCheck configuration!")
-                self.msg.exec_()
+                self.msg.exec()
 
 
           mksize=mksize+2
@@ -368,7 +378,7 @@ class ImageView(QWidget):
              except ValueError:
                 self.msg = QMessageBox()
                 self.msg.setText("'"+self.parent.cfg_intMarker.strip()+"'"+ " is not a proper marker style\nCheck configuration!")
-                self.msg.exec_()
+                self.msg.exec()
 
         mymap = self.get_cmap()
 
@@ -397,7 +407,7 @@ class ImageView(QWidget):
         vmax=self.max_s.value()
 
         mymap = self.get_cmap()
-        dane2=dane.copy()
+        dane2=dane
 
 
         #if self.parent.cfg_showsat:
@@ -430,8 +440,9 @@ class ImageView(QWidget):
           self.max_s.setRange(int(float(a)),int(float(b)))
 
     def clim_auto(self):
-        c0 = numpy.median(self.dane,axis=None)
-        c_sigma=numpy.std(self.dane,axis=None)
+        probka = sample(self.dane)
+        c0 = numpy.median(probka,axis=None)
+        c_sigma=numpy.std(probka,axis=None)
         if c_sigma==numpy.inf: c_sigma=5.
         self.min_e.setText("%i"%(c0-5*c_sigma))
         self.max_e.setText("%i"%(c0+5*c_sigma))
@@ -550,17 +561,17 @@ class ImageView(QWidget):
        self.zmiana_zoom()
 
     def zmiana_flipX(self):
-       if self.flipX_c.checkState(): self.parent.cfg_flipX=True
+       if self.flipX_c.isChecked(): self.parent.cfg_flipX=True
        else: self.parent.cfg_flipX=False
        self.zmiana_zoom()
 
     def zmiana_flipY(self):
-       if self.flipY_c.checkState(): self.parent.cfg_flipY=True
+       if self.flipY_c.isChecked(): self.parent.cfg_flipY=True
        else: self.parent.cfg_flipY=False
        self.zmiana_zoom()
 
     def zmiana_rot90(self):
-       if self.rot90_c.checkState():
+       if self.rot90_c.isChecked():
           self.parent.cfg_rot90=True
           x,y=self.x,self.y
           self.x=y
@@ -862,7 +873,7 @@ class ImageView(QWidget):
        self.rot90_c.setChecked(False)
 
        self.mksize_l=QLabel("Marker Size:")
-       self.mksize_s= QSlider(QtCore.Qt.Horizontal)
+       self.mksize_s= QSlider(Qt.Orientation.Horizontal)
        self.mksize_s.setRange(int(0),int(200))
        #self.mksize_s.setTickInterval(1)
        self.mksize_s.setValue(25)
@@ -887,8 +898,9 @@ class ImageView(QWidget):
        self.min_e= QLineEdit()
        #self.min_e.setReadOnly(True)
 
-       c0 = numpy.nanmedian(self.dane,axis=None)           # nan: mapy (MapTab) moga miec NaN
-       c_sigma=numpy.nanstd(self.dane,axis=None)
+       probka = sample(self.dane)
+       c0 = numpy.nanmedian(probka,axis=None)           # nan: mapy (MapTab) moga miec NaN
+       c_sigma=numpy.nanstd(probka,axis=None)
        if c_sigma==numpy.inf: c_sigma=5.
        if not numpy.isfinite(c0 - c_sigma): c0, c_sigma = 0., 1.
        self.min_e.setText("%i"%(c0-5*c_sigma))
@@ -896,15 +908,15 @@ class ImageView(QWidget):
        a=self.min_e.text()
        b=self.max_e.text()
 
-       self.min_s= QSlider(QtCore.Qt.Vertical)
+       self.min_s= QSlider(Qt.Orientation.Vertical)
        self.min_s.setRange(int(float(a)),int(float(b)))
 
-       self.max_s= QSlider(QtCore.Qt.Vertical)
+       self.max_s= QSlider(Qt.Orientation.Vertical)
        self.max_s.setRange(int(float(a)),int(float(b)))
 
        self.auto_p =  QPushButton('Auto')
 
-       self.zoom_s= QSlider(QtCore.Qt.Horizontal)
+       self.zoom_s= QSlider(Qt.Orientation.Horizontal)
        if len(self.dane)>len(self.dane[0]): self.zoom_s.setRange(int(-0.3*len(self.dane)),int(len(self.dane)-1))
        else: self.zoom_s.setRange(int(-0.3*len(self.dane[0])),int(len(self.dane[0])))
        self.zoom_s.setValue(1)

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-FitsView is a PyQt5 desktop application for viewing FITS astronomical images. It displays the
+FitsView is a PyQt6 desktop application for viewing FITS astronomical images. It displays the
 image, a viewfinder/aperture window, a zoomable thumbnail, and supports marking points, reading
 `daophot` output files (`.coo`, `.ap`, `.lst`, `.als`, `.out`, `.tfr`, `.rsl`), photometry
 (background/zero-point/counts queries), column/line/radial profiles, isophote plotting, and frame
@@ -35,6 +35,21 @@ script `test`) is an ad hoc manual script that hardcodes a local data path
 automated test and will fail on another machine without that directory.
 
 Packaging: `pipx install .` / `pipx reinstall fitsview`.
+
+## Qt: PyQt6 through PyQtX (2026-11-11)
+
+FitsView is on PyQt6, like TOI (needed to embed it in TOI later: PyQt5 and PyQt6 cannot share one process).
+- All Qt imports go through `fitsview/PyQtX` (`from fitsview.PyQtX.QtWidgets import ...`,
+  `from fitsview.PyQtX import QtCore, QtGui`) — a verbatim copy of TOI's `PyQtX/` (PyQt6, else PyQt5, plus aliases of
+  some short Qt5 enum names). Keep the `Qt*.py` files identical to TOI's, so they can later move to a shared module;
+  do not add aliases there.
+- Write enums with their full names (`Qt.WindowType.Tool`, `Qt.CheckState.Checked`, `QSizePolicy.Policy.Expanding`,
+  `QAbstractItemView.EditTrigger.NoEditTriggers`) — they work in both PyQt5 5.15 and PyQt6. Use `exec()`, not `exec_()`.
+- Use `checkbox.isChecked()`, never `if checkbox.checkState():` — in PyQt6 enum members are always truthy.
+- Import PyQtX **before** any `matplotlib.backends.backend_qtagg` import: matplotlib picks the Qt binding that is
+  already imported (the pipx venv may still contain PyQt5). Use `backend_qtagg`, not `backend_qt5agg`.
+- `fitsview.py:setup_qt()` (standalone only): forces `QT_QPA_PLATFORM=xcb` on Wayland (as TOI does — native
+  Wayland ignores window positioning, `fv_windows.place_window`) and enables HiDPI scaling when running on Qt5.
 
 ## Local dependency: pyaraucaria
 

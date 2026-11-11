@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-from PyQt5.QtCore import Qt
-from matplotlib.figure import Figure
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
-from PyQt5.QtWidgets import QMainWindow, QWidget, QLabel, QTextEdit, QLineEdit, QPushButton, \
+# PyQtX przed matplotlib: backend_qtagg bierze juz zaimportowane PyQt6 (inaczej moglby wziac PyQt5)
+from fitsview.PyQtX.QtCore import Qt
+from fitsview.PyQtX import QtCore
+from fitsview.PyQtX.QtWidgets import QMainWindow, QWidget, QLabel, QTextEdit, QLineEdit, QPushButton, \
     QGridLayout, QHBoxLayout, QVBoxLayout, QComboBox, QCheckBox, QTableWidget, \
-    QTableWidgetItem, QApplication, QTabWidget, QToolButton, QMenu, QFileDialog, QHeaderView
-from PyQt5 import QtCore
+    QTableWidgetItem, QApplication, QTabWidget, QToolButton, QMenu, QFileDialog, QHeaderView, QScrollArea, QSizePolicy, \
+    QAbstractItemView, QFrame
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 
 import numpy as np
 import numpy
@@ -17,10 +19,12 @@ from astropy.io import fits
 
 from pyaraucaria.ffs import FFS
 
+from fitsview.fv_windows import place_window
+
 class HeaderTabLocal(QWidget):
    def __init__(self,parent,header): 
        QWidget.__init__(self)
-       self.setWindowFlag(Qt.Tool)
+       self.setWindowFlag(Qt.WindowType.Tool)
        self.parent=parent
        self.header=header
        self.setWindowTitle('HDR')
@@ -44,8 +48,7 @@ class HeaderTabLocal(QWidget):
        grid.addWidget(self.cl,4,1)
        self.setLayout(grid)
        self.update()
-       gm=eval(self.parent.parent.cfg_geometry)
-       self.setGeometry(int(gm[1])+50,int(gm[1]+50),600,600)
+       place_window(self, self.parent, 600, 600)
 
        
 
@@ -66,7 +69,7 @@ class HeaderTabLocal(QWidget):
 class TextWindow(QWidget):
   def __init__(self,parent):
       QWidget.__init__(self)
-      self.setWindowFlag(Qt.Tool)
+      self.setWindowFlag(Qt.WindowType.Tool)
       self.parent=parent
       self.setWindowTitle('Querry')
       
@@ -88,10 +91,9 @@ class TextWindow(QWidget):
       vbox.addLayout(hbox2)        
       self.setLayout(vbox) 
          
-      self.pole.setReadOnly(1)
+      self.pole.setReadOnly(True)
 #      self.pole.setLineWrapMode(0)
-      gm=eval(self.parent.parent.cfg_geometry)
-      self.setGeometry(int(gm[1])+int(gm[2])+10,int(gm[1]),400,500)
+      place_window(self, self.parent, 400, 300)
   def update(self):
       self.show()
       self.pole.append(self.txt)
@@ -103,7 +105,7 @@ class TextWindow(QWidget):
 class PlotWindow(QWidget):
     def __init__(self,parent):
         QWidget.__init__(self)
-        self.setWindowFlag(Qt.Tool)
+        self.setWindowFlag(Qt.WindowType.Tool)
         self.parent=parent
         self.setWindowTitle('Plot')
         self.txt=""
@@ -133,11 +135,10 @@ class PlotWindow(QWidget):
         vbox.addLayout(hbox3)
         self.setLayout(vbox)
 
-        self.pole.setReadOnly(1)
+        self.pole.setReadOnly(True)
         self.toolbar.hide()
+        place_window(self, self.parent, 400, 400, dy=330)       # pod oknem Query
         self.show()
-        gm=eval(self.parent.parent.cfg_geometry)
-        self.setGeometry(int(gm[1])+int(gm[2])+10,int(gm[1]+200),400,400)
 
     def update(self):
         self.show()
@@ -153,13 +154,13 @@ class PlotWindow(QWidget):
             self.toolbar.show()
         else:
             self.toolbar.hide()
-        QMainWindow.resizeEvent(self, event)
+        QWidget.resizeEvent(self, event)
 
 
 class FigureWindow(QWidget):
     def __init__(self,parent):
         QWidget.__init__(self)
-        self.setWindowFlag(Qt.Tool)
+        self.setWindowFlag(Qt.WindowType.Tool)
         self.parent=parent
         self.txt = ""
         self.mkUI()
@@ -190,7 +191,7 @@ class FigureWindow(QWidget):
         self.toolbar.hide()
 
         self.pole= QLineEdit()
-        self.pole.setReadOnly(1)
+        self.pole.setReadOnly(True)
 
         self.cl =  QPushButton('Close', self)
         self.cl.clicked.connect(self.close_window)
@@ -214,9 +215,8 @@ class FigureWindow(QWidget):
 
         self.setLayout(grid)
 
+        place_window(self, self.parent, 500, 400, dy=330)
         self.show()
-        gm=eval(self.parent.parent.cfg_geometry)
-        self.setGeometry(int(gm[1])+int(gm[2])+10,int(gm[1]+200),500,400)
 
     def update(self):
 
@@ -245,7 +245,7 @@ class FigureWindow(QWidget):
             self.toolbar.show()
         else:
             self.toolbar.hide()
-        QMainWindow.resizeEvent(self, event)
+        QWidget.resizeEvent(self, event)
 
 def doc_summary(func):
     # pierwszy akapit docstringu metody FFS (podpowiedz do przycisku)
@@ -359,7 +359,7 @@ class FFSWindow(QWidget):
     RUN_ALL = ["stats", "sky", "cosmics", "lines", "stars", "sky", "stats", "psf"]
 
     def __init__(self, parent, image, saturation=None,dx=0,dy=0):
-        QWidget.__init__(self)          # zwykle okno (nie Qt.Tool), zeby nie zaslanialo glownego
+        QWidget.__init__(self)          # zwykle okno (nie Qt.WindowType.Tool), zeby nie zaslanialo glownego
         self.parent = parent
         self.image = image
         self.dx=int(dx)
@@ -428,7 +428,7 @@ class FFSWindow(QWidget):
         return out
 
     def run(self, stage):
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
             self.changed = set()
             if stage == "all" or self.ffs is None:
@@ -626,8 +626,8 @@ class FFSWindow(QWidget):
         self.products_t.setRowCount(len(self.products))
         for i, (typ, name, opis) in enumerate(self.products):
             item = QTableWidgetItem()
-            item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled | Qt.ItemIsSelectable)
-            item.setCheckState(Qt.Checked if self.shown(typ, name) else Qt.Unchecked)
+            item.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+            item.setCheckState(Qt.CheckState.Checked if self.shown(typ, name) else Qt.CheckState.Unchecked)
             item.setToolTip("Tab open: check to show, uncheck to hide")
             self.products_t.setItem(i, 0, item)
             for j, txt in enumerate([typ, name, self.product_step.get((typ, name), "")], 1):
@@ -654,7 +654,7 @@ class FFSWindow(QWidget):
     def product_checked(self, item):
         if item.column() != 0: return
         typ, name, opis = self.products[item.row()]
-        if item.checkState() == Qt.Checked: self.show_product(typ, name)
+        if item.checkState() == Qt.CheckState.Checked: self.show_product(typ, name)
         else: self.hide_product(typ, name)
         self.update_products()
 
@@ -735,7 +735,7 @@ class FFSWindow(QWidget):
                 e.setChecked(default)
             elif isinstance(default, tuple):              # exclude: nazwy masek pomijanych (bad_mask)
                 e = QToolButton()
-                e.setPopupMode(QToolButton.InstantPopup)
+                e.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
                 menu = QMenu(e)
                 menu.setToolTipsVisible(True)             # opis maski (masks_description) w podpowiedzi
                 # zle piksele i zrodla (FFS.EXCLUDE_ALL), przelania ladunku i domyslne spoza tej listy;
@@ -776,7 +776,14 @@ class FFSWindow(QWidget):
             w = self.mk_params(grid, w, f, label=len(funcs) > 1)
         grid.setRowStretch(w, 1)
         page.setLayout(grid)
-        return page
+        # przewijana: strona Lines ma ~600 px wysokosci i bez przewijania okno FFS nie miescilo sie na laptopie
+        scroll = QScrollArea()
+        scroll.setWidget(page)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setMinimumWidth(page.minimumSizeHint().width() + scroll.verticalScrollBar().sizeHint().width())
+        return scroll
 
     def mk_button(self, title, funcs, stage):
         p = QPushButton(title)
@@ -840,14 +847,14 @@ class FFSWindow(QWidget):
         self.stats_t.setHorizontalHeaderLabels(["frame", "value"])
         self.stats_t.verticalHeader().hide()
         self.stats_t.horizontalHeader().setStretchLastSection(True)
-        self.stats_t.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.stats_t.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
 
         self.products_t = QTableWidget(0, 4)
         self.products_t.setHorizontalHeaderLabels(["shown", "type", "name", "step"])
         self.products_t.verticalHeader().hide()
-        self.products_t.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
-        self.products_t.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.products_t.setSelectionBehavior(QTableWidget.SelectRows)
+        self.products_t.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self.products_t.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.products_t.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.products_t.doubleClicked.connect(self.product_clicked)
         self.products_t.itemChanged.connect(self.product_checked)
         self.products_t.setToolTip("shown (or double click): open as a tab (masks are also drawn on the image); "
@@ -858,7 +865,10 @@ class FFSWindow(QWidget):
         self.delete_p.clicked.connect(self.delete_pushed)
 
         self.pole_e = QTextEdit()
-        self.pole_e.setReadOnly(1)
+        self.pole_e.setReadOnly(True)
+        # log nie rozpycha okna (domyslnie chcial ~200 px i parametry dostawaly kilka wierszy)
+        self.pole_e.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored)
+        self.pole_e.setMinimumHeight(4 * self.pole_e.fontMetrics().lineSpacing())
 
         self.cl_p = QPushButton('Close', self)
         self.cl_p.clicked.connect(self.close_window)
@@ -870,16 +880,16 @@ class FFSWindow(QWidget):
         grid.addWidget(self.pole_e, 4, 0)
         grid.addWidget(self.stats_t, 1, 1, 1, 2)
         grid.addWidget(self.products_t, 2, 1, 2, 2)
-        grid.addWidget(self.delete_p, 4, 2, QtCore.Qt.AlignTop)
+        grid.addWidget(self.delete_p, 4, 2, Qt.AlignmentFlag.AlignTop)
         grid.addWidget(self.cl_p, 5, 2)
         grid.setColumnStretch(0, 3)
         grid.setColumnStretch(1, 2)
-        grid.setRowStretch(1, 1)
-        grid.setRowStretch(2, 1)
+        grid.setRowStretch(1, 2)
+        grid.setRowStretch(2, 2)
+        grid.setRowStretch(4, 1)
         self.setLayout(grid)
 
-        gm = eval(self.parent.parent.cfg_geometry)
-        self.setGeometry(int(gm[1]) + int(gm[2]) + 10, int(gm[1]), 850, 650)
+        place_window(self, self.parent, 850, 650)
 
     def update(self):
         self.show()

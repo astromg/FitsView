@@ -3,10 +3,26 @@
 
 import os
 import sys
-from PyQt5.QtWidgets import QApplication
+from fitsview.PyQtX.QtWidgets import QApplication
+from fitsview.PyQtX.QtCore import Qt
 from fitsview import FitsView_gui
 
+def setup_qt():
+    # przed utworzeniem QApplication; przy osadzeniu FitsView w innym programie (np. TOI) decyduje ten program.
+    # Wayland: Qt6 na GNOME dziala natywnie na Waylandzie, a tam program nie moze ustawiac pozycji swoich okien
+    # (place_window bylby ignorowany) - jak w TOI (toi.py) wymuszamy xcb (XWayland), chyba ze ktos ustawil inaczej.
+    if sys.platform.startswith("linux") and os.environ.get("XDG_SESSION_TYPE") == "wayland":
+        os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
+    # HiDPI: Qt6 skaluje sam. Qt5 (PyQtX bez PyQt6) na laptopie 2880x1800 (Xft.dpi=192) mial skale 1.0 - czcionki
+    # podwojne, a rozmiary okien i pol w pikselach polowe za male; w Qt6 tych atrybutow juz nie ma.
+    if hasattr(Qt, "AA_EnableHighDpiScaling"):
+        QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+        QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+    if hasattr(QApplication, "setHighDpiScaleFactorRoundingPolicy"):      # skale ulamkowe (1.25, 1.5)
+        QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
+
 def main():
+    setup_qt()
     app = QApplication(sys.argv)
 
     cwd=os.getcwd()   # curent working directory
@@ -54,7 +70,7 @@ def main():
             main.load_coo()
 
 
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
 
 if __name__ == '__main__':
     main()
