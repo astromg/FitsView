@@ -19,7 +19,9 @@ from astropy.io import fits
 
 from pyaraucaria.ffs import FFS
 
-from fitsview.fv_windows import place_window
+from fitsview.fv_windows import init_panel, show_panel, close_panel
+from fitsview.fv_theme import theme
+from fitsview import fv_toi
 
 class HeaderTabLocal(QWidget):
    def __init__(self,parent,header): 
@@ -47,8 +49,8 @@ class HeaderTabLocal(QWidget):
        grid.addWidget(self.heder_e,1,0,3,2)
        grid.addWidget(self.cl,4,1)
        self.setLayout(grid)
+       init_panel(self, self.parent, "header", "Header", 600, 600)
        self.update()
-       place_window(self, self.parent, 600, 600)
 
        
 
@@ -60,18 +62,18 @@ class HeaderTabLocal(QWidget):
        for x in hdr:
            if str(text).lower() in str(x).lower(): txt=txt+str(x)+"\n"
        self.heder_e.setText(txt) 
-       self.show()
+       show_panel(self)
 
 
    def close_window(self): 
-       self.close()     
+       close_panel(self)
 
 class TextWindow(QWidget):
   def __init__(self,parent):
       QWidget.__init__(self)
       self.setWindowFlag(Qt.WindowType.Tool)
       self.parent=parent
-      self.setWindowTitle('Querry')
+      self.setWindowTitle('Query')
       
       self.txt=""
 
@@ -93,21 +95,22 @@ class TextWindow(QWidget):
          
       self.pole.setReadOnly(True)
 #      self.pole.setLineWrapMode(0)
-      place_window(self, self.parent, 400, 300)
+      init_panel(self, self.parent, "query", "Query", 400, 300)
   def update(self):
-      self.show()
+      show_panel(self)
       self.pole.append(self.txt)
       self.parent.activateWindow()
       
   def close_window(self):     
-      self.close()      
+      close_panel(self)
 
 class PlotWindow(QWidget):
-    def __init__(self,parent):
+    def __init__(self,parent,kind="profile",title="Plot"):
+        # kind/title: panel (dok) - profile (klawisze l, c), radial (r), isophotes (e)
         QWidget.__init__(self)
         self.setWindowFlag(Qt.WindowType.Tool)
         self.parent=parent
-        self.setWindowTitle('Plot')
+        self.setWindowTitle(title)
         self.txt=""
         self.fig = Figure(figsize=(2, 2), linewidth=-1, dpi=100,tight_layout=True, frameon=True)
         self.canvas = FigureCanvas(self.fig)
@@ -137,16 +140,20 @@ class PlotWindow(QWidget):
 
         self.pole.setReadOnly(True)
         self.toolbar.hide()
-        place_window(self, self.parent, 400, 400, dy=330)       # pod oknem Query
-        self.show()
+        init_panel(self, self.parent, kind, title, 400, 400, dy=330)       # okno: pod oknem Query
 
     def update(self):
-        self.show()
+        self.style_theme()                      # po axes.clear() w Image osie wracaja do bieli
+        show_panel(self)
         self.pole.setText(self.txt)
         self.parent.activateWindow()
 
+    def style_theme(self):
+        theme.style_figure(self.fig, [self.axes])
+        self.canvas.draw_idle()
+
     def close_window(self):
-        self.close()
+        close_panel(self)
         self.parent.update()
 
     def resizeEvent(self, event):
@@ -215,8 +222,7 @@ class FigureWindow(QWidget):
 
         self.setLayout(grid)
 
-        place_window(self, self.parent, 500, 400, dy=330)
-        self.show()
+        init_panel(self, self.parent, "figure", "Figure", 500, 400, dy=330)
 
     def update(self):
 
@@ -230,14 +236,19 @@ class FigureWindow(QWidget):
 
         self.axes.plot(x,y,".b")
 
+        theme.style_figure(self.fig, [self.axes])
         self.canvas.draw()
 
-        self.show()
+        show_panel(self)
         #self.pole.setText(self.txt)
         self.parent.activateWindow()
 
+    def style_theme(self):
+        theme.style_figure(self.fig, [self.axes])     # bez update(): nie otwiera zamknietego okna
+        self.canvas.draw_idle()
+
     def close_window(self):
-        self.close()
+        close_panel(self)
         self.parent.update()
 
     def resizeEvent(self, event):
@@ -384,6 +395,7 @@ class FFSWindow(QWidget):
         self.txt = ""
         self.ffs = None
         self.fourier = None          # widmo mocy wycinka (power_spectrum, funkcja FitsView, nie FFS)
+        self.toi_views = {}          # przycisk Run fast (calc_frame_fwhm jak TOI): widoki tabeli gwiazd z warunkiem (fv_toi.views), nazwa -> ustawienia
         self.fft_peak = None
         self.params = {}
         self.products = []           # (typ, nazwa, opis) produktow biezacego obiektu FFS
@@ -431,7 +443,9 @@ class FFSWindow(QWidget):
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
             self.changed = set()
-            if stage == "all" or self.ffs is None:
+            if stage == "fast":
+                self.toi_setup()
+            if stage in ("all", "fast") or self.ffs is None:
                 self.reset_ffs()
             elif self.get_params("FFS") != self.ffs_params:
                 self.pole_e.append("Frame parameters changed: new FFS (masks and maps dropped)")
@@ -457,6 +471,16 @@ class FFSWindow(QWidget):
         self.pole_e.append("%s done (bin %d); masks: %s" % (done, self.ffs.bin, ", ".join(self.ffs.masks) or "-"))
         self.show_results(stage)
 
+    def toi_setup(self):
+        # przycisk Run fast (calc_frame_fwhm jak TOI): cala klatka i parametry konstruktora jak w TOI (saturacja wg teleskopu, autobin) - pola
+        # zakladki Frame dostaja te wartosci, wiec kolejne kroki licza na tym samym obiekcie FFS
+        self.image, self.dx, self.dy = self.parent.dane, 0, 0
+        h, w = self.image.shape
+        self.info_l.setText("cut: %d x %d px at x=0, y=0 (whole frame, Run fast: calc_frame_fwhm as in TOI)" % (w, h))
+        sat = fv_toi.saturation_for(getattr(self.parent, "hdr", None))
+        self.params["FFS"]["saturation"].setText("%g" % sat)
+        self.params["FFS"]["autobin"].setChecked(True)
+
     def reset_pushed(self):
         # nowy wycinek z aktualnego widoku obrazu
         self.image, self.dx, self.dy = self.parent.ffs_cut()
@@ -468,6 +492,7 @@ class FFSWindow(QWidget):
         self.ffs = FFS(self.image, **self.ffs_params)
         self.ffs.mk_saturation_mask()
         self.fourier = self.fft_peak = None
+        self.toi_views = {}
         self.step_n = 0
         self.product_step = {key: "0: new" for key in self.snapshot()}
         self.changed = set(self.product_step)
@@ -479,6 +504,8 @@ class FFSWindow(QWidget):
         out.update({("map", k): v for k, v in ffs.maps.items()})
         for name, attr in self.TABLES.items():
             if getattr(ffs, attr) is not None: out[("table", name)] = getattr(ffs, attr)
+        if ffs.stars is not None:
+            for name in self.toi_views: out[("table", name)] = ffs.stars
         if self.fourier is not None: out[("fft", "fourier")] = self.fourier
         return out
 
@@ -518,6 +545,12 @@ class FFSWindow(QWidget):
             self.optional(ffs.calc_star_field_stats, **self.get_params("calc_star_field_stats"))
         if stage == "fft":
             self.fourier, self.fft_peak = power_spectrum(ffs, **self.get_params("power_spectrum"))
+        if stage == "fast":
+            fv_toi.run(ffs)
+            hdr = getattr(self.parent, "hdr", None)
+            self.toi_views = fv_toi.views(self.ffs_params["saturation"])
+            self.toi_html = fv_toi.summary(ffs, fv_toi.pixel_scale(hdr), self.dx, self.dy,
+                                           red=theme.hex("bad_fg"), dim=theme.hex("dim_fg"))
         if stage == "calibration":
             ffs.mk_columns_map(**self.get_params("mk_columns_map"))
             ffs.mk_bad_columns_mask(**self.get_params("mk_bad_columns_mask"))
@@ -598,6 +631,13 @@ class FFSWindow(QWidget):
             self.pole_e.append("frame_fwhm: %.2f  ellipticity: %.2f  used_stars: %d" % (
                 ffs.stats["frame"]["fwhm"], ffs.stats["frame"]["ellipticity"], ffs.stats["frame"]["used_stars"]))
 
+        if stage == "fast":
+            # oznaczenia jak w TOI zwyklymi tabelami: linie (odcinki) i gwiazdy z zakresem kolumny (suwaki)
+            if ffs.lines is not None: self.show_product("table", "lines")
+            if ffs.stars is not None:
+                for name in self.toi_views: self.show_product("table", name)
+            self.pole_e.append("<b>Run fast</b> (calc_frame_fwhm as in TOI, whole frame):<br>" + self.toi_html)
+
         if stage == "fft" and self.fourier is not None:
             self.show_product("fft", "fourier")
             pk = self.fft_peak
@@ -620,6 +660,8 @@ class FFSWindow(QWidget):
         if ffs.lines is not None: self.products.append(("table", "lines", "Detected lines (find_lines, classify_lines)"))
         if ffs.stars is not None: self.products.append(("table", "stars", "Detected stars; not measured have NaN (find_stars, star_info)"))
         if self.fourier is not None: self.products.append(("fft", "fourier", "log10 power spectrum of the cut-out; zero frequency in the centre, offset (dx, dy) = frequency (dx/nx, dy/ny) cycles/px - not image coordinates (power_spectrum)"))
+        if ffs.stars is not None:
+            for name, v in self.toi_views.items(): self.products.append(("table", name, v["description"]))
         if ffs.psf_grid is not None: self.products.append(("table", "psf grid", "PSF on a grid, drawn as whiskers: direction theta, length ~ ellipticity, the longest 0.9 of a cell (mk_star_maps)"))
 
         self.products_t.blockSignals(True)
@@ -654,9 +696,17 @@ class FFSWindow(QWidget):
     def product_checked(self, item):
         if item.column() != 0: return
         typ, name, opis = self.products[item.row()]
-        if item.checkState() == Qt.CheckState.Checked: self.show_product(typ, name)
+        if item.checkState() == Qt.CheckState.Checked:
+            self.show_product(typ, name)
+            self.goto_product(typ, name)
         else: self.hide_product(typ, name)
         self.update_products()
+
+    def goto_product(self, typ, name):
+        # glowne okno przeskakuje na zakladke produktu pokazanego klikiem (nie przy samym liczeniu)
+        entry = self.gui_entry(typ, name)
+        if entry is not None and entry.get("tab") is not None:
+            self.parent.parent.TabWindow.setCurrentWidget(entry["tab"])
 
     def delete_pushed(self):
         # usuwa zaznaczone produkty z obiektu FFS (kolejne kroki ich nie uzywaja) i chowa ich zakladki
@@ -668,6 +718,7 @@ class FFSWindow(QWidget):
             if typ == "mask": self.ffs.masks.pop(name, None)
             elif typ == "map": self.ffs.maps.pop(name, None)
             elif typ == "fft": self.fourier = self.fft_peak = None
+            elif name in self.toi_views: del self.toi_views[name]      # tylko widok, tabela gwiazd zostaje
             else: setattr(self.ffs, self.TABLES[name], None)
             self.product_step.pop((typ, name), None)
             names.append("%s %s" % (name, typ))
@@ -690,6 +741,10 @@ class FFSWindow(QWidget):
             # widmo w rozmiarze wycinka, nie w ukladzie klatki - bez full_frame
             desc = [d for t, n, d in self.products if t == typ and n == name]
             gui.add_map(self.fourier, name=self.tab_name(typ, name), description=desc[0] if desc else "", frame=False)
+        elif typ == "table" and name in self.toi_views:
+            # widok tabeli gwiazd: warunek, marker i kolor jak oznaczenia TOI (pozniej do zmiany w zakladce)
+            v = self.toi_views[name]
+            gui.add_coo(self.shift_table(ffs.stars), name=self.tab_name(typ, name), color=v["color"], preset=v)
         elif typ == "table":
             table = getattr(ffs, self.TABLES[name])
             if name == "psf grid": table = self.whiskers(table)
@@ -712,6 +767,7 @@ class FFSWindow(QWidget):
     def product_clicked(self, index):
         typ, name, opis = self.products[index.row()]
         self.show_product(typ, name)
+        self.goto_product(typ, name)
 
     # ------------------------------------------------------------------ UI
 
@@ -831,13 +887,22 @@ class FFSWindow(QWidget):
         run_all.setToolTip(tooltip("Run all", "New FFS, then: " + ", ".join(self.RUN_ALL) +
                                    "\n\nThe last sky and stats use all masks (cosmics, lines, spikes, stars)."))
         run_all.clicked.connect(lambda: self.run("all"))
-        buttons.addWidget(run_all, 2, 1)
-        buttons.addWidget(self.mk_button("Fourier", fft, "fft"), 2, 2)
+        buttons.addWidget(run_all, 3, 1)                 # Run fast i Run all obok siebie
+        buttons.addWidget(self.mk_button("Fourier", fft, "fft"), 2, 1)
+        toi = QPushButton("Run fast")
+        toi.setToolTip(tooltip("Run fast", "FFS.calc_frame_fwhm as TOI does it on every science/snap/focus frame: new FFS on the whole frame "
+                               "(saturation by telescope: jk15 150000, else 45000; autobin), calc_frame_fwhm(threshold=10, "
+                               "fwhm=5, box=15, N_stars=50), sky_gradient(n_segments=7), calc_star_field_stats(). "
+                               "Marked as in TOI with ordinary tables: lines, and the star table twice with a column range "
+                               "condition (stars rejected - red squares, stars saturated - red circles). Summary as the TOI "
+                               "panel in the log."))
+        toi.clicked.connect(lambda: self.run("fast"))
+        buttons.addWidget(toi, 3, 0)
         reset = QPushButton("Reset")
         reset.setToolTip(tooltip("Reset", "New cut-out from the current view of the image and new FFS: "
                                  "all masks and maps are dropped, then Statistics."))
         reset.clicked.connect(self.reset_pushed)
-        buttons.addWidget(reset, 3, 0)
+        buttons.addWidget(reset, 2, 2)
         self.save_p = QPushButton("Save MEF")
         self.save_p.setToolTip(tooltip("Save MEF", doc_summary(FFS.save_mef) + "\n\nResults of the last run, in cut-out coordinates (FFCUTX0, FFCUTY0 in the header)."))
         self.save_p.clicked.connect(self.save_pushed)
@@ -889,12 +954,12 @@ class FFSWindow(QWidget):
         grid.setRowStretch(4, 1)
         self.setLayout(grid)
 
-        place_window(self, self.parent, 850, 650)
+        init_panel(self, self.parent, "ffs", "FFS", 850, 650)
 
     def update(self):
-        self.show()
+        show_panel(self)
         self.pole_e.append(self.txt)
         self.parent.activateWindow()
 
     def close_window(self):
-        self.hide()
+        close_panel(self)

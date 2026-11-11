@@ -51,6 +51,58 @@ FitsView is on PyQt6, like TOI (needed to embed it in TOI later: PyQt5 and PyQt6
 - `fitsview.py:setup_qt()` (standalone only): forces `QT_QPA_PLATFORM=xcb` on Wayland (as TOI does — native
   Wayland ignores window positioning, `fv_windows.place_window`) and enables HiDPI scaling when running on Qt5.
 
+## Theme (2026-11-11)
+
+TOI's themes: `fitsview/toi_theme.py` is a copy of TOI's `toi_theme.py` (only the PyQtX imports changed; keep it in
+sync, later a shared module). `fitsview/fv_theme.py` wraps it: choice in Configuration → Theme, stored in
+`QSettings("OCA","FitsView")/theme`; default `"toi"` = the theme TOI uses (`QSettings("OCA","TOI")/theme`, read at
+start). FitsView never writes TOI's setting. Colours via `theme.c(key)` / `theme.qcolor(key)` with TOI's semantic keys;
+matplotlib figures via `theme.style_figure(fig, axes)`; `axes.clear()` resets the axes facecolor, so set
+`theme.bg()` after it. Widgets with figures implement `style_theme()`; `FitsView.apply_theme()` (registered with
+`theme.on_change`) calls it on tabs and `active_windows`. Image colormaps are not themed.
+
+## Panels and docking (2026-11-11)
+
+Helper windows (Query, Profile, Radial profile, Isophotes, FFS, Header, Figure, Configuration, Help) are "panels"
+(`fitsview/fv_windows.py`):
+- In a constructor call `init_panel(self, anchor, kind, title, w, h, dy)` (never `place_window` + `show()`); show with
+  `show_panel(win)`, close with `close_panel(win)` (never `self.show()` / `self.close()` / `raise_()`).
+- **Docking is optional, off by default** (2026-11-11: on a laptop screen docks only took space from the image).
+  Configuration → "Dock panels in the main window (after restart)" = `QSettings("OCA","FitsView")/docking`;
+  `fitsview.py` then builds `FitsViewWindow`, otherwise a plain `FitsView` with panels as separate windows.
+- With docking, `FitsViewWindow` holds one `QDockWidget` per kind (`PANELS`, all created hidden at start so the saved
+  layout covers every kind). A new widget of the same kind (new frame, other cube plane) replaces the dock's widget;
+  the old one becomes a hidden parentless window and returns to the dock when `show_panel`'d again.
+- Layout and window geometry are saved on close in `QSettings("OCA","FitsView")` (`dock_state`, `window_geometry`).
+- Embedded (no `FitsViewWindow`): panels are ordinary windows placed by `place_window`.
+- **Gotcha:** these classes set `self.parent = <Image>`, shadowing `QWidget.parent()` — use `parentWidget()`.
+- `FitsView` sets titles via `self.window().setWindowTitle(...)` and closes via `self.window().close()`.
+
+## FFS "Run fast" (calc_frame_fwhm as TOI), column range and sorting in tables (2026-11-11)
+
+- **No separate drawing mechanisms** (mgorski): results are marked only through the existing ones — catalog tables
+  (`Catalog` → markers / segments in `ImageView.update_points`), masks, maps.
+- Catalog tables have a **range of the "color" column**: two sliders (min, max) with edit fields and an "outside"
+  checkbox. Objects outside the range are not drawn (markers, segments; the `f` key skips them); in the table they are
+  greyed (`muted_fg`) and moved to the end (`FitsTableModel.set_active`, stable after the current sort). Stored in
+  the `table_data` entry as `mask`, `range`, `outside`; full range (and not outside) = `mask None`.
+- Click a column header to sort: `FitsTableModel` keeps a permutation (`order`/`inverse`, `sort_key`); the table,
+  `selected_index` and drawing stay in data order; the row header shows the data row number.
+- `add_coo(..., preset={"marker", "mksize", "valuecol", "range", "outside"})` presets a new table's Catalog settings
+  (kept on replacement). Markers "open circle" and "open square" are drawn hollow.
+- Marker **"whisker (ellipticity, theta)"** (offered only for tables with `ellipticity` and `theta`, e.g. `ffs.stars`):
+  a headless `quiver` through each object along theta (FFS convention, x = column; `angles="xy"` so flips need no
+  redraw), length = e x `WHISKER_FRAC` (0.2) of the visible axes width (as TOI; constant under zoom), Size = line
+  thickness (Size x `WHISKER_PT` pt). Colour/range as other markers.
+- Markers coloured by the "color" column use `FitsView_image.VALUE_CMAP`: two colours, blue (min) → red (max), via
+  purple, no white middle (viridis was too many hues and its dark end vanished on the image). Maps keep their own cmap.
+- `fitsview/fv_toi.py`: TOI's FFS call (`calc_frame_fwhm(threshold=10, fwhm=5, box=15, N_stars=50)`,
+  `sky_gradient(n_segments=7)`, `calc_star_field_stats()`, saturation by `TELESCOP`: jk15 150000, else 45000), the
+  TOI-panel summary text, and `views()`: the star table shown twice with a preset range as TOI marks them
+  (`stars rejected` — color `shape`, range 0.55–0.95, outside, open squares; `stars saturated` — color `max_adu`,
+  range from the saturation up, open circles). Lines use the normal `ffs.lines` table. The "Run fast" button (next to "Run all"; earlier "TOI run", "calc_frame_fwhm") runs it
+  on the whole frame. Keep constants in sync with TOI `fits_gui.py` by hand.
+
 ## Local dependency: pyaraucaria
 
 `pyaraucaria` is declared in `pyproject.toml` as a local, editable path dependency
@@ -88,7 +140,8 @@ to FFS as `FFS.power_spectrum` without agreement and was removed; it now lives i
 
 The app has no automated entry-point routing beyond `fitsview/fitsview.py:main()`, which parses
 `sys.argv` (a FITS filename, an optional coordinate/marker file, or `x y` point coordinates) and
-drives a single `FitsView_gui.FitsView` widget (a `QWidget`, not `QMainWindow`).
+drives a `FitsView_gui.FitsView` widget (a `QWidget`, embeddable e.g. in TOI); with the optional docking it sits
+inside `FitsView_gui.FitsViewWindow` (`QMainWindow`).
 
 Module breakdown:
 

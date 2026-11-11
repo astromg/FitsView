@@ -11,7 +11,7 @@ import matplotlib.patches as patches
 import numpy as np
 from astropy.io import fits
 
-from matplotlib.colors import ListedColormap
+from matplotlib.colors import ListedColormap, LinearSegmentedColormap
 from matplotlib.collections import LineCollection
 from matplotlib.figure import Figure
 
@@ -22,6 +22,23 @@ from scipy.optimize import curve_fit
 
 
 from fitsview import FitsView_widgets
+from fitsview.fv_theme import theme
+from fitsview.fv_windows import show_panel
+
+
+# kolorowanie markerow wg kolumny "color" (Catalog): dwa kolory, niebieski - najmniejsza wartosc, czerwony - najwieksza
+# (posrednie przez fiolet; bez bialego srodka, ktory znikalby na szarym obrazie). Wczesniej viridis - za wiele
+# odcieni, a ciemny fiolet ginal na tle.
+VALUE_CMAP = LinearSegmentedColormap.from_list("fv_values", ["#1e90ff", "#ff2a2a"])
+
+# marker "whisker" (Catalog, tabele z kolumnami ellipticity i theta, np. ffs.stars): kreska przez gwiazde wzdluz
+# dluzszej osi (kierunek (cos theta, sin theta) w ukladzie obrazu, x = kolumna - konwencja FFS), dlugosc ~ eliptycznosc
+# jako czesc szerokosci widocznego obrazka (stala przy zoomie): dlugosc = e x WHISKER_FRAC szerokosci osi, jak TOI
+# (e = 0.1 -> 2 % szerokosci); Size (Catalog) to grubosc kreski: Size x WHISKER_PT punktu.
+# Slabe gwiazdy maja szumowe e - zawezic zakres (suwaki).
+WHISKER = "whisker (ellipticity, theta)"
+WHISKER_FRAC = 0.2
+WHISKER_PT = 0.3
 
 
 def sample(dane, n=1000000):
@@ -184,11 +201,14 @@ class ImageView(QWidget):
         x1,y1 = self.to_screen(numpy.array(dane["x1"]),numpy.array(dane["y1"]))
         segments = [[(a,b),(c,d)] for a,b,c,d in zip(x0,y0,x1,y1)]
         n_seg = len(segments)
+        sel = zestaw.get("mask")                      # zakres kolumny "color" (suwaki w Catalog)
+        if sel is None: sel = numpy.ones(n_seg, bool)
         spike = numpy.asarray(dane["spike"], dtype=bool) if "spike" in dane.colnames else numpy.zeros(n_seg, bool)
         bleed = numpy.asarray(dane["bleed"], dtype=bool) if "bleed" in dane.colnames else numpy.zeros(n_seg, bool)
-        style = [":" if b else "--" if s else "-" for s, b in zip(spike, bleed)] or "-"
+        style = [":" if b else "--" if s else "-" for s, b, k in zip(spike, bleed, sel) if k] or "-"
         color = zestaw["marker_color"] if "marker_color" in zestaw.keys() else "r"
-        self.axes.add_collection(LineCollection(segments,colors=color,linestyles=style,linewidths=1.5),autolim=False)
+        shown = [g for g, k in zip(segments, sel) if k]
+        self.axes.add_collection(LineCollection(shown,colors=color,linestyles=style,linewidths=1.5),autolim=False)
         n = zestaw["selected_index"]
         if 0 <= n < len(segments):
             self.axes.add_collection(LineCollection([segments[n]],colors="r",linewidths=4,alpha=0.5),autolim=False)
@@ -236,6 +256,8 @@ class ImageView(QWidget):
                     y = zestaw["data"][yc]
 
                     xs, ys = self.to_screen(x, y)
+                    sel = zestaw.get("mask")                  # zakres kolumny "color" (suwaki w Catalog); None - wszystkie
+                    px, py = (numpy.asarray(xs)[sel], numpy.asarray(ys)[sel]) if sel is not None else (xs, ys)
 
                     marker = "."
                     mksize = 10
@@ -254,29 +276,33 @@ class ImageView(QWidget):
                     if "valuecol" in zestaw.keys():
                         valuecol = zestaw["valuecol"]
 
-                    if valuecol == "None":
-                        if marker == "open circle":
-                            set = self.axes.plot(xs,ys,marker="o",markersize=mksize,color=mkcolor,mfc='none',linestyle='None')
+                    OPEN = {"open circle": "o", "open square": "s"}    # puste w srodku (mfc none)
+                    if marker == WHISKER:
+                        self.draw_whiskers(zestaw, sel, xs, ys, mksize, mkcolor, valuecol)
+                    elif valuecol == "None":
+                        if marker in OPEN:
+                            set = self.axes.plot(px,py,marker=OPEN[marker],markersize=mksize,color=mkcolor,mfc='none',linestyle='None')
                         else:
-                            set = self.axes.plot(xs,ys,marker=marker,markersize=mksize,color=mkcolor,linestyle='None')
+                            set = self.axes.plot(px,py,marker=marker,markersize=mksize,color=mkcolor,linestyle='None')
                         self.points_set.append(set[0])
 
                     else:
-                        val = zestaw["data"][valuecol]
+                        val = numpy.asarray(zestaw["data"][valuecol], dtype=float)
+                        if sel is not None: val = val[sel]
                         size_scatter = mksize ** 2  # scatter używa pola powierzchni
 
-                        if marker == "open circle":
+                        if marker in OPEN:
 
                             mask = ~numpy.isnan(val)
                             norm_val = numpy.zeros_like(val)
                             norm_val[mask] = (val[mask] - numpy.min(val[mask])) / (numpy.max(val[mask]) - numpy.min(val[mask]))
 
                             edge_colors = numpy.zeros((len(val), 4))
-                            edge_colors[mask] = plt.cm.viridis(norm_val[mask])
+                            edge_colors[mask] = VALUE_CMAP(norm_val[mask])
 
-                            sc = self.axes.scatter(xs, ys, s=size_scatter, marker='o',edgecolors=edge_colors, facecolors='none')
+                            sc = self.axes.scatter(px, py, s=size_scatter, marker=OPEN[marker],edgecolors=edge_colors, facecolors='none')
                         else:
-                            sc = self.axes.scatter(xs, ys, s=size_scatter, c=val, marker=marker, cmap='viridis')
+                            sc = self.axes.scatter(px, py, s=size_scatter, c=val, marker=marker, cmap=VALUE_CMAP)
                         self.points_set.append(sc)
 
 
@@ -286,6 +312,34 @@ class ImageView(QWidget):
                         self.points_set.append(selection[0])
 
         self.update_mask()
+
+    def draw_whiskers(self, zestaw, sel, xs, ys, mksize, mkcolor, valuecol):
+        # kreski eliptycznosci (marker WHISKER): quiver bez grotow, pivot w gwiezdzie. Kierunek w danych (angles="xy" -
+        # flip osi dziala bez przerysowania), dlugosc jako czesc szerokosci osi (scale_units="width") - stala przy
+        # zoomie; mksize (Size) - grubosc.
+        # Kolor jak markery: staly albo wg kolumny color (VALUE_CMAP).
+        dane = zestaw["data"]
+        keep = numpy.ones(len(dane), bool) if sel is None else numpy.asarray(sel, bool).copy()
+        e = numpy.asarray(dane["ellipticity"], dtype=float)
+        t = numpy.asarray(dane["theta"], dtype=float)
+        x = numpy.asarray(dane[zestaw["xcol"]], dtype=float)
+        y = numpy.asarray(dane[zestaw["ycol"]], dtype=float)
+        keep &= numpy.isfinite(e) & numpy.isfinite(t) & numpy.isfinite(x) & numpy.isfinite(y)
+        if not keep.any(): return
+        e, t, x, y = e[keep], t[keep], x[keep], y[keep]
+        X0, Y0 = self.to_screen(x, y)
+        X1, Y1 = self.to_screen(x + numpy.cos(t), y + numpy.sin(t))      # kierunek po rot90
+        U, V = numpy.asarray(X1) - X0, numpy.asarray(Y1) - Y0
+        colors = mkcolor
+        if valuecol != "None" and valuecol in dane.colnames:
+            val = numpy.asarray(dane[valuecol], dtype=float)[keep]
+            ok = numpy.isfinite(val)
+            lo, hi = (val[ok].min(), val[ok].max()) if ok.any() else (0., 1.)
+            colors = VALUE_CMAP(numpy.clip((val - lo) / (hi - lo if hi > lo else 1.), 0, 1))
+            colors[~ok] = (0.5, 0.5, 0.5, 1.)
+        self.axes.quiver(X0, Y0, U * e, V * e, color=colors, angles="xy", scale_units="width", scale=1. / WHISKER_FRAC,
+                         pivot="middle", headwidth=0, headlength=0, headaxislength=0,
+                         units="inches", width=max(mksize, 1) * WHISKER_PT / 72.)
 
     def sync_options(self):
         # checkboxy z konfiguracji (wspolnej dla zakladek); bez sygnalow, zeby np. zmiana_rot90
@@ -329,6 +383,7 @@ class ImageView(QWidget):
         vmax=self.max_s.value()
 
         self.axes.clear()
+        self.axes.set_facecolor(theme.bg())       # clear() przywraca biale tlo osi (widac je obok obrazka)
         self.axes.set_xticks([])
         self.axes.set_yticks([])
 
@@ -386,6 +441,7 @@ class ImageView(QWidget):
         k = max(1, max(dane.shape) // 1000)
         ny, nx = dane.shape
         self.axes_small.clear()
+        self.axes_small.set_facecolor(theme.bg())
         self.image_small = self.axes_small.imshow(dane[::k,::k],cmap=mymap,vmin=vmin, vmax=vmax,interpolation="None",aspect="equal",origin='lower',
                                                   extent=(-0.5, ((nx+k-1)//k)*k-0.5, -0.5, ((ny+k-1)//k)*k-0.5))
         self.axes_small.set_xticks([])
@@ -416,6 +472,7 @@ class ImageView(QWidget):
         #   mymap.set_bad("red")
 
         self.axes_viewfinder.clear()
+        self.axes_viewfinder.set_facecolor(theme.bg())
         self.image_viewfinder = self.axes_viewfinder.imshow(dane2,cmap=mymap,vmin=vmin, vmax=vmax,interpolation="None",aspect="equal")
         self.axes_viewfinder.set_xticks([])
         self.axes_viewfinder.set_yticks([])
@@ -509,6 +566,23 @@ class ImageView(QWidget):
 
        self.zmiana_zoom()
 
+
+    def mouse_scroll(self,event):
+       # kolko myszy: zoom x1.25 na krok wokol punktu pod kursorem (zostaje w tym samym miejscu ekranu)
+       if event.inaxes is not self.axes or event.xdata is None: return
+       n = len(self.dane[0])
+       z = max((n - self.zoom_s.value() + 1) / 2., 1.)           # polowa widocznego zakresu, jak w zmiana_zoom
+       f = 1.25 ** (-event.step)                                  # step > 0: kolko od siebie - przyblizenie
+       v = int(round(n + 1 - 2 * z * f))
+       v = min(max(v, self.zoom_s.minimum()), self.zoom_s.maximum())
+       z2 = max((n - v + 1) / 2., 1.)
+       if v == self.zoom_s.value(): return
+       self.x = event.xdata + (self.x - event.xdata) * z2 / z
+       self.y = event.ydata + (self.y - event.ydata) * z2 / z
+       self.zoom_s.blockSignals(True)
+       self.zoom_s.setValue(v)
+       self.zoom_s.blockSignals(False)
+       self.zmiana_zoom()
 
     def mouse_move(self,event):
        try:
@@ -730,6 +804,9 @@ class ImageView(QWidget):
                         diffx = numpy.array(cx) - float(xr)
                         diffy = numpy.array(cy) - float(yr)
                         diff = diffx ** 2 + diffy ** 2
+                        if zestaw.get("mask") is not None:       # tylko obiekty w zakresie (suwaki w Catalog)
+                            if not zestaw["mask"].any(): continue
+                            diff = numpy.where(zestaw["mask"], diff, numpy.inf)
                         n = numpy.argmin(diff)
 
                         if zestaw["selected_index"] == n:
@@ -773,10 +850,9 @@ class ImageView(QWidget):
 
         if "l" in event.key:
           if not self.c_window:
-             self.c_window=FitsView_widgets.PlotWindow(self)
+             self.c_window=FitsView_widgets.PlotWindow(self,"profile","Profile")
              self.parent.active_windows.append(self.c_window)
-          self.c_window.show()
-          self.c_window.raise_()
+          show_panel(self.c_window)
           #try: self.axes.lines[-1].remove()
           #except: pass
 
@@ -806,17 +882,16 @@ class ImageView(QWidget):
           self.text_window.update()
           self.c_window.txt=txt
           self.c_window.update()
-          self.c_window.raise_()
+          show_panel(self.c_window)
           print(txt)
 
 
 
         if "c" in event.key:
           if not self.c_window:
-             self.c_window=FitsView_widgets.PlotWindow(self)
+             self.c_window=FitsView_widgets.PlotWindow(self,"profile","Profile")
              self.parent.active_windows.append(self.c_window)
-          self.c_window.show()
-          self.c_window.raise_()
+          show_panel(self.c_window)
           #try: self.axes.lines[-1].remove()
           #except: pass
 
@@ -847,12 +922,19 @@ class ImageView(QWidget):
           self.text_window.update()
           self.c_window.txt=txt
           self.c_window.update()
-          self.c_window.raise_()
+          show_panel(self.c_window)
           print(txt)
 
         self.key_action(event.key,x,y,xr,yr)
 
         self.update_viewfinder(x,y)
+
+    def style_theme(self):
+        # tlo plotna i osi w kolorach motywu (obrazy maja wlasna cmap, nie zmienia sie)
+        for fig, axes in [(self.fig, self.fig.axes), (self.fig2, [self.axes_viewfinder]), (self.fig3, [self.axes_small])]:
+            fig.patch.set_visible(True)          # frameon=False: bez tla figury przeswitywalo biale
+            theme.style_figure(fig, axes)
+            fig.canvas.draw_idle()
 
     def key_action(self,key,x,y,xr,yr):
         # klawisze specyficzne dla podklasy (Image: fotometria i FFS)
@@ -934,6 +1016,7 @@ class ImageView(QWidget):
        self.cid_move=self.canvas.mpl_connect('motion_notify_event', self.mouse_move)
        self.cid_click=self.canvas.mpl_connect('button_press_event', self.image_clicked)
        self.cid_key=self.canvas.mpl_connect('key_press_event', self.keypressed)
+       self.cid_scroll=self.canvas.mpl_connect('scroll_event', self.mouse_scroll)
        #self.mpl_connect('scroll_event', self._mousescroll)
 
 
@@ -1015,6 +1098,7 @@ class ImageView(QWidget):
        grid.setColumnStretch(4, 0)
        grid.setColumnStretch(5, 0)
        grid.setColumnStretch(6, 0)
+       self.style_theme()
 
 
 class Image(ImageView):
@@ -1038,8 +1122,11 @@ class Image(ImageView):
        grid.addWidget(self.ffs_p,5,6)
 
     def show_header(self):
-       self.hdrl_window=FitsView_widgets.HeaderTabLocal(self,self.hdr)
-       self.parent.active_windows.append(self.hdrl_window)
+       if getattr(self, "hdrl_window", None) is None:     # jeden panel na obraz, pokazywany ponownie
+          self.hdrl_window=FitsView_widgets.HeaderTabLocal(self,self.hdr)
+          self.parent.active_windows.append(self.hdrl_window)
+       else:
+          show_panel(self.hdrl_window)
 
     def open_ffs(self):
         # okno FFS (klawisz 's' lub przycisk FFS): przy pierwszym uruchomieniu wycinek z widoku,
@@ -1049,8 +1136,7 @@ class Image(ImageView):
             self.s_window = FitsView_widgets.FFSWindow(self, image, dx=x1, dy=y1)
             self.parent.active_windows.append(self.s_window)
 
-        self.s_window.show()
-        self.s_window.raise_()
+        show_panel(self.s_window)
 
     def ffs_cut(self):
         # widoczny fragment obrazu (ze wspolnego widoku, tez gdy ta zakladka jest ukryta)
@@ -1186,11 +1272,10 @@ class Image(ImageView):
         if "e" in key:
 
           if not self.e_window:
-             self.e_window=FitsView_widgets.PlotWindow(self)
+             self.e_window=FitsView_widgets.PlotWindow(self,"isophotes","Isophotes")
              self.parent.active_windows.append(self.e_window)
 
-          self.e_window.show()
-          self.e_window.raise_()
+          show_panel(self.e_window)
 
 
           r=int((2*int(self.parent.cfg_apersize)+15)/2.)
@@ -1219,18 +1304,17 @@ class Image(ImageView):
 
           self.e_window.txt=txt
           self.e_window.update()
-          self.e_window.raise_()
+          show_panel(self.e_window)
 
           print(txt)
 
         if "r" in key:
 
           if not self.r_window:
-             self.r_window=FitsView_widgets.PlotWindow(self)
+             self.r_window=FitsView_widgets.PlotWindow(self,"radial","Radial profile")
              self.parent.active_windows.append(self.r_window)
 
-          self.r_window.show()
-          self.r_window.raise_()
+          show_panel(self.r_window)
 
           r=int(self.parent.cfg_apersize)
 
@@ -1289,7 +1373,7 @@ class Image(ImageView):
 
           self.r_window.txt=txt
           self.r_window.update()
-          self.r_window.raise_()
+          show_panel(self.r_window)
 
 
           print(txt2)

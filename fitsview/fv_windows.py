@@ -51,3 +51,53 @@ def place_window(win, anchor, width, height, dy=0):
     y = min(max(y, avail.top()), avail.bottom() - h + 1)
     win.resize(w, h)
     win.move(x, y)
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Panele: okna pomocnicze (Query, wykresy, FFS, Header, Figure, Configuration, Help). Gdy FitsView siedzi w
+# FitsViewWindow (QMainWindow, samodzielne uruchomienie), panel jest dokiem (QDockWidget) - mozna go przesunac,
+# ulozyc w zakladkach, odpiac (podwojne klikniecie w tytul) i zamknac; uklad zapamietuje sie sam. Bez takiego
+# okna (FitsView osadzony w innym programie, np. TOI) panel jest zwyklym oknem obok glownego (place_window).
+# Jeden dok na rodzaj (kind): kolejny widget tego rodzaju (np. Query z nowej klatki albo innej plaszczyzny kostki)
+# podmienia widget w doku; poprzedni wraca do doku, gdy zostanie znow pokazany (show_panel).
+
+def panel_host(anchor):
+    win = anchor.window() if anchor is not None else None
+    return win if hasattr(win, "fv_dock") else None
+
+
+def init_panel(win, anchor, kind, title, width, height, dy=0):
+    # zamiast place_window w konstruktorze okna pomocniczego; okno pokazuje show_panel
+    win._fv_kind = kind
+    win._fv_title = title
+    win._fv_dock = None
+    host = panel_host(anchor)
+    if host is not None:
+        host.fv_dock(win, kind, title)
+    else:
+        place_window(win, anchor, width, height, dy)
+
+
+def docked(win):
+    return getattr(win, "_fv_dock", None) is not None
+
+
+def show_panel(win):
+    dock = getattr(win, "_fv_dock", None)
+    if dock is None:
+        win.show()
+        win.raise_()
+        return
+    if dock.widget() is not win:                 # w doku jest teraz inny widget tego rodzaju
+        dock.window().fv_dock(win, win._fv_kind, win._fv_title)
+    win.show()
+    dock.show()
+    dock.raise_()                                # zakladka doku na wierzch
+
+
+def close_panel(win):
+    dock = getattr(win, "_fv_dock", None)
+    if dock is not None and dock.widget() is win:
+        dock.hide()
+    elif dock is None:
+        win.close()

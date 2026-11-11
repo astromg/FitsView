@@ -13,7 +13,7 @@ Fits file is displayed as the <font color="blue">image</font>.
 On the right side the upper window shows <font color="blue">vievfinder</font> 
 window with <font color="blue">aperture</font> marked as the green circle. 
 Below is the <font color="blue">thumbnail</font> of the main image. 
-You can <font color="blue">zoom</font> with the slider below this window. 
+You can <font color="blue">zoom</font> with the slider below this window, or with the mouse wheel over the main image (around the cursor). 
 You can navigate by left-clicking on the main image, 
 or by left-clicking on the thumbnail. 
 <br>  

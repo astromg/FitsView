@@ -11,6 +11,7 @@ from fitsview.PyQtX.QtWidgets import QLabel, QCheckBox, QComboBox, QHBoxLayout
 
 from fitsview import FitsView_image
 from fitsview.FitsView_catalog import ColorButton
+from fitsview.fv_theme import theme
 
 
 class MapTab(FitsView_image.ImageView):
@@ -69,6 +70,7 @@ class MapTab(FitsView_image.ImageView):
         if self.dirty: return                            # niewidoczna zakladka
         self.cax.clear()
         self.fig.colorbar(self.image, cax=self.cax)      # nadaza za set_clim (suwaki min/max)
+        theme.style_figure(self.fig, [self.cax])
         self.canvas.draw_idle()
 
 

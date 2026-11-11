@@ -11,7 +11,8 @@ import threading
 # PyQtX przed matplotlib: backend_qtagg bierze juz zaimportowane PyQt6
 from fitsview.PyQtX.QtWidgets import QMainWindow, QApplication, QWidget, QMessageBox, QLabel,QCheckBox, QComboBox, QTextEdit, QLineEdit, QDialog, QTabWidget, QPushButton, QFileDialog, QGridLayout, QHBoxLayout, QVBoxLayout, QMessageBox
 from fitsview.PyQtX import QtCore, QtGui
-from fitsview.PyQtX.QtCore import Qt
+from fitsview.PyQtX.QtCore import Qt, QSettings
+from fitsview.PyQtX.QtWidgets import QDockWidget
 
 import os,sys
 import warnings
@@ -30,7 +31,8 @@ from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as Navigation
 
 from fitsview import FitsView_image, FitsView_catalog, FitsView_maps
 from fitsview.fv_lib import daophot_files_parser
-from fitsview.fv_windows import place_window, fit_to_screen
+from fitsview.fv_windows import place_window, fit_to_screen, init_panel, show_panel, close_panel, docked
+from fitsview.fv_theme import theme
 
 warnings.simplefilter('ignore', category=AstropyWarning)
 
@@ -38,7 +40,8 @@ warnings.simplefilter('ignore', category=AstropyWarning)
 
 class FitsView(QWidget):
     def __init__(self,args,parent=None):
-        QWidget.__init__(self)
+        # parent: FitsViewWindow (samodzielnie, z dokami) albo None (wlasne okno, np. osadzony w innym programie)
+        QWidget.__init__(self,parent)
 
 
         txt=__file__
@@ -54,13 +57,15 @@ class FitsView(QWidget):
         self.initiate()
         self.mkUI()
         self.conf()
-        gm=eval(self.cfg_geometry)
-        #self.setGeometry(gm[0],gm[1],800,750)          # Jak sie ustawi size okna zle to wypieprza caly program
-        self.setGeometry(gm[0],gm[1],gm[2],gm[3])
-        fit_to_screen(self)                      # geometria zapisana na wiekszym monitorze
-        self.show()
-        self.raise_()
+        if parent is None:                       # w FitsViewWindow geometria i show() naleza do okna
+            gm=eval(self.cfg_geometry)
+            #self.setGeometry(gm[0],gm[1],800,750)          # Jak sie ustawi size okna zle to wypieprza caly program
+            self.setGeometry(gm[0],gm[1],gm[2],gm[3])
+            fit_to_screen(self)                      # geometria zapisana na wiekszym monitorze
+            self.show()
+            self.raise_()
         self.com=Communicate()
+        theme.on_change(self.apply_theme)
 
         #self.update()
        
@@ -147,7 +152,7 @@ class FitsView(QWidget):
 
           self.prefetch_gen = self.prefetch_gen + 1      # przerywa czytanie w tle innego pliku
           QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
-          self.setWindowTitle("loading " + os.path.basename(self.fname) + " ...")
+          self.window().setWindowTitle("loading " + os.path.basename(self.fname) + " ...")
           QApplication.processEvents()
           self.TabWindow.clear()
 
@@ -186,12 +191,13 @@ class FitsView(QWidget):
        self.coo_p.setStyleSheet("")
 
     def coo_index_changed(self):
-       self.coo_p.setStyleSheet("color: rgb(255,140,0);")
+       self.coo_p.setStyleSheet("color: %s;" % theme.c("warn2_fg"))     # wybrany inny plik, jeszcze nie wczytany
 
 
     def open_confWindow(self):
-       self.cfg_window=Settings(self)
-       self.active_windows.append(self.cfg_window)
+       if getattr(self, "cfg_window", None) is None:     # jedno okno (panel), pokazywane ponownie
+          self.cfg_window=Settings(self)
+          self.active_windows.append(self.cfg_window)
        try:
           i = self.TabWindow.currentIndex()
           self.cfg_active_tab=i
@@ -200,12 +206,20 @@ class FitsView(QWidget):
           self.cfg_zoomY = self.tab[i].y
        except: print("EXCEPTION 003")
 
-       place_window(self.cfg_window, self, 400, 500)
-       self.cfg_window.show()
+       show_panel(self.cfg_window)
        self.cfg_window.update()
 
 
+    def apply_theme(self):
+       # po zmianie motywu: naglowek, wykresy w zakladkach i oknach (paleta Qt zmienia sie sama)
+       if self.fname and hasattr(self, "hdu"): self.updateHInfo()
+       for x in list(getattr(self, "tab", [])) + list(self.active_windows):
+           if hasattr(x, "style_theme"): x.style_theme()
+
     def zamknij(self):
+       if self.window() is not self:            # FitsViewWindow: zapisuje uklad i zamyka okna (closeEvent)
+          self.window().close()
+          return
        for okno in self.active_windows: okno.close()
        self.close()
 
@@ -280,8 +294,10 @@ class FitsView(QWidget):
 
     def open_help(self):
        tmp=self.pwd+"FitsView.hlp"
-       help_window = HelpWindow(self,tmp)
-       self.active_windows.append(help_window)
+       if getattr(self, "help_window", None) is None:
+          self.help_window = HelpWindow(self,tmp)
+          self.active_windows.append(self.help_window)
+       show_panel(self.help_window)
 
 
     def get_coo(self):
@@ -321,8 +337,11 @@ class FitsView(QWidget):
             self.tab.append(widget)
             self.TabWindow.addTab(widget, title)
 
-    def add_coo(self,data,name="data",color=None,plot_image=True):
-        # tabela o tej samej nazwie (np. ponowne FFS) jest podmieniana, kolor markerow zostaje
+    def add_coo(self,data,name="data",color=None,plot_image=True,preset=None):
+        # tabela o tej samej nazwie (np. ponowne FFS) jest podmieniana, kolor markerow zostaje;
+        # preset: ustawienia Catalog dla nowej tabeli, np. {"marker": "open square", "mksize": 9, "valuecol": "shape",
+        # "range": (0.55, 0.95), "outside": True}
+        # (FFS, przycisk Run fast); przy podmianie zostaja ustawienia uzytkownika
         i = self.find_data(self.table_data,name)
         if i is None:
             tmp = {}
@@ -333,6 +352,8 @@ class FitsView(QWidget):
                 tmp["marker_color"] = next(self.color_cycle)
             tmp["plot_image"] = plot_image
             tmp["tab"] = None
+            for k in ("marker", "mksize", "valuecol", "range", "outside"):
+                if preset and k in preset: tmp[k] = preset[k]
             self.table_data.append(tmp)
             i = len(self.table_data) - 1
         tmp = self.table_data[i]
@@ -412,7 +433,7 @@ class FitsView(QWidget):
             check1 = False
             plik = open(self.coo_file, 'r')
             if self.fname:
-               self.setWindowTitle(self.fname+"   "+self.coo_file.split("/")[-1])
+               self.window().setWindowTitle(self.fname+"   "+self.coo_file.split("/")[-1])
 
 
             if self.coo_file.endswith((".ap",".coo",".out",".als",".lst")):
@@ -502,7 +523,7 @@ class FitsView(QWidget):
 
     def updateHInfo(self):
 
-       self.setWindowTitle(self.fname)
+       self.window().setWindowTitle(self.fname)
        self.hinfo_e.clear()
        self.hinfo_e.setFont(QtGui.QFont("Courier New"))
 
@@ -513,9 +534,9 @@ class FitsView(QWidget):
        for x in self.cfg_hdr_keywords[0]:
            try: tmp=str(hdu[x])
            except: pass
-       self.hinfo_e.setTextColor(Qt.GlobalColor.black)
+       self.hinfo_e.setTextColor(theme.qcolor("dim_fg"))
        self.hinfo_e.insertPlainText(txt.ljust(10))
-       self.hinfo_e.setTextColor(Qt.GlobalColor.darkRed)
+       self.hinfo_e.setTextColor(theme.qcolor("text"))
        self.hinfo_e.insertPlainText(tmp.ljust(20))
 
        txt=self.cfg_hdr_keywords[3][0]
@@ -523,9 +544,9 @@ class FitsView(QWidget):
        for x in self.cfg_hdr_keywords[3]:
            try: tmp=str(hdu[x])
            except: pass
-       self.hinfo_e.setTextColor(Qt.GlobalColor.black)
+       self.hinfo_e.setTextColor(theme.qcolor("dim_fg"))
        self.hinfo_e.insertPlainText(txt.ljust(15))
-       self.hinfo_e.setTextColor(Qt.GlobalColor.darkRed)
+       self.hinfo_e.setTextColor(theme.qcolor("text"))
        self.hinfo_e.insertPlainText(tmp.ljust(15))
 
        txt=self.cfg_hdr_keywords[6][0]
@@ -533,9 +554,9 @@ class FitsView(QWidget):
        for x in self.cfg_hdr_keywords[6]:
            try: tmp=str(hdu[x])
            except: pass
-       self.hinfo_e.setTextColor(Qt.GlobalColor.black)
+       self.hinfo_e.setTextColor(theme.qcolor("dim_fg"))
        self.hinfo_e.insertPlainText(txt.ljust(10))
-       self.hinfo_e.setTextColor(Qt.GlobalColor.darkRed)
+       self.hinfo_e.setTextColor(theme.qcolor("text"))
        self.hinfo_e.insertPlainText(tmp)
 
        self.hinfo_e.insertPlainText("\n")
@@ -546,9 +567,9 @@ class FitsView(QWidget):
        for x in self.cfg_hdr_keywords[1]:
            try: tmp=str(hdu[x])
            except: pass
-       self.hinfo_e.setTextColor(Qt.GlobalColor.black)
+       self.hinfo_e.setTextColor(theme.qcolor("dim_fg"))
        self.hinfo_e.insertPlainText(txt.ljust(10))
-       self.hinfo_e.setTextColor(Qt.GlobalColor.darkRed)
+       self.hinfo_e.setTextColor(theme.qcolor("text"))
        self.hinfo_e.insertPlainText(tmp.ljust(20))
 
        txt=self.cfg_hdr_keywords[4][0]
@@ -556,9 +577,9 @@ class FitsView(QWidget):
        for x in self.cfg_hdr_keywords[4]:
            try: tmp=str(hdu[x])
            except: pass
-       self.hinfo_e.setTextColor(Qt.GlobalColor.black)
+       self.hinfo_e.setTextColor(theme.qcolor("dim_fg"))
        self.hinfo_e.insertPlainText(txt.ljust(15))
-       self.hinfo_e.setTextColor(Qt.GlobalColor.darkRed)
+       self.hinfo_e.setTextColor(theme.qcolor("text"))
        self.hinfo_e.insertPlainText(tmp.ljust(15))
 
        txt=self.cfg_hdr_keywords[7][0]
@@ -566,9 +587,9 @@ class FitsView(QWidget):
        for x in self.cfg_hdr_keywords[7]:
            try: tmp=str(hdu[x])
            except: pass
-       self.hinfo_e.setTextColor(Qt.GlobalColor.black)
+       self.hinfo_e.setTextColor(theme.qcolor("dim_fg"))
        self.hinfo_e.insertPlainText(txt.ljust(10))
-       self.hinfo_e.setTextColor(Qt.GlobalColor.darkRed)
+       self.hinfo_e.setTextColor(theme.qcolor("text"))
        self.hinfo_e.insertPlainText(tmp)
 
        self.hinfo_e.insertPlainText("\n")
@@ -580,9 +601,9 @@ class FitsView(QWidget):
        for x in self.cfg_hdr_keywords[2]:
            try: tmp=str(hdu[x])
            except: pass
-       self.hinfo_e.setTextColor(Qt.GlobalColor.black)
+       self.hinfo_e.setTextColor(theme.qcolor("dim_fg"))
        self.hinfo_e.insertPlainText(txt.ljust(10))
-       self.hinfo_e.setTextColor(Qt.GlobalColor.darkRed)
+       self.hinfo_e.setTextColor(theme.qcolor("text"))
        self.hinfo_e.insertPlainText(tmp.ljust(20))
 
        txt=self.cfg_hdr_keywords[5][0]
@@ -590,9 +611,9 @@ class FitsView(QWidget):
        for x in self.cfg_hdr_keywords[5]:
            try: tmp=str(hdu[x])
            except: pass
-       self.hinfo_e.setTextColor(Qt.GlobalColor.black)
+       self.hinfo_e.setTextColor(theme.qcolor("dim_fg"))
        self.hinfo_e.insertPlainText(txt.ljust(15))
-       self.hinfo_e.setTextColor(Qt.GlobalColor.darkRed)
+       self.hinfo_e.setTextColor(theme.qcolor("text"))
        self.hinfo_e.insertPlainText(tmp.ljust(15))
 
        txt=self.cfg_hdr_keywords[8][0]
@@ -600,9 +621,9 @@ class FitsView(QWidget):
        for x in self.cfg_hdr_keywords[8]:
            try: tmp=str(hdu[x])
            except: pass
-       self.hinfo_e.setTextColor(Qt.GlobalColor.black)
+       self.hinfo_e.setTextColor(theme.qcolor("dim_fg"))
        self.hinfo_e.insertPlainText(txt.ljust(10))
-       self.hinfo_e.setTextColor(Qt.GlobalColor.darkRed)
+       self.hinfo_e.setTextColor(theme.qcolor("text"))
        self.hinfo_e.insertPlainText(tmp)
 
 
@@ -981,7 +1002,7 @@ class HelpWindow(QDialog):
       self.setWindowTitle('Help')
       self.pole=QTextEdit()
       self.cl = QPushButton('Close', self)
-      self.cl.clicked.connect(lambda: self.close())
+      self.cl.clicked.connect(lambda: close_panel(self))
 
 
 
@@ -997,7 +1018,7 @@ class HelpWindow(QDialog):
       vbox.addLayout(hbox2)
       self.setLayout(vbox)
 
-      place_window(self, self.parent, 600, 600)
+      init_panel(self, self.parent, "help", "Help", 600, 600)
 
 
       try: f=open(plik,"r")
@@ -1028,7 +1049,6 @@ class HelpWindow(QDialog):
       self.pole.setText(self.text)
       #self.pole.setMarkdown(self.text)
       #self.resize(600,500)
-      self.show()
 
 
     #==================================================================================
@@ -1049,6 +1069,18 @@ class Settings(QWidget):   # DEFINCE CONFIG
        if self.parent.cfg_save_chx[1]: self.display_c.setChecked(True)
        self.zoom_c=QCheckBox("Save Zoom settings")
        if self.parent.cfg_save_chx[2]: self.zoom_c.setChecked(True)
+
+       # motyw dziala od razu i jest zapamietany sam (QSettings), bez Update / Save CFG
+       self.theme_l=QLabel("Theme: ")
+       self.theme_s=QComboBox()
+       for key, title in theme.choices(): self.theme_s.addItem(title, key)
+       self.theme_s.setCurrentIndex(max(0, self.theme_s.findData(theme.choice)))
+       self.theme_s.currentIndexChanged.connect(lambda i: theme.choose(self.theme_s.itemData(i)))
+
+       self.dock_c=QCheckBox("Dock panels in the main window (after restart)")
+       self.dock_c.setToolTip("Query, plots, FFS, Header, ... as dockable panels inside the main window instead of separate windows")
+       self.dock_c.setChecked(docking_enabled())
+       self.dock_c.toggled.connect(lambda on: QSettings("OCA", "FitsView").setValue("docking", "true" if on else "false"))
 
 
 
@@ -1094,6 +1126,11 @@ class Settings(QWidget):   # DEFINCE CONFIG
 
        grid=QGridLayout()
        w=0
+       grid.addWidget(self.theme_l,w,0)
+       grid.addWidget(self.theme_s,w,1)
+       w=w+1
+       grid.addWidget(self.dock_c,w,0,1,2)
+       w=w+1
        grid.addWidget(self.geometry_c,w,0)
        w=w+1
        grid.addWidget(self.display_c,w,0)
@@ -1129,6 +1166,7 @@ class Settings(QWidget):   # DEFINCE CONFIG
        grid.addWidget(self.close_p,w,1)
 
        self.setLayout(grid)
+       init_panel(self, self.parent, "config", "Configuration", 400, 500)
 
 
     def update(self):     # CONFIG WINDOW UPDATE
@@ -1161,7 +1199,7 @@ class Settings(QWidget):   # DEFINCE CONFIG
 
        if self.geometry_c.isChecked():
           chx1=True
-          self.parent.cfg_geometry=self.parent.geometry().getRect()
+          self.parent.cfg_geometry=self.parent.window().geometry().getRect()
           txt=txt+"geometry="+str(self.parent.cfg_geometry)+"\n"
           txt=txt+"active_tab="+str(self.parent.cfg_active_tab)+"\n"
 
@@ -1200,4 +1238,80 @@ class Settings(QWidget):   # DEFINCE CONFIG
        cfg_file.close()
 
     def close_cfg(self):        # CONFIG SAVE
-       self.close()
+       close_panel(self)
+
+
+def docking_enabled():
+    # Configuration -> "Dock panels": domyslnie wylaczone (na malym ekranie doki zabieraly miejsce obrazowi)
+    return str(QSettings("OCA", "FitsView").value("docking", "false")).lower() == "true"
+
+
+class FitsViewWindow(QMainWindow):
+    # Samodzielne FitsView: FitsView w srodku, okna pomocnicze jako doki (fv_windows.init_panel). Doki wszystkich
+    # rodzajow sa tworzone od razu (ukryte, z pustym widgetem), zeby zapisany uklad (QSettings "dock_state")
+    # obejmowal tez panele nieotwierane w tej sesji. Domyslnie: Query po prawej u gory, reszta w zakladkach pod nim.
+    # Osadzanie w innym programie dalej przez sam FitsView (QWidget) - wtedy panele sa zwyklymi oknami.
+    PANELS = [("query", "Query"), ("profile", "Profile"), ("radial", "Radial profile"), ("isophotes", "Isophotes"),
+              ("ffs", "FFS"), ("header", "Header"), ("figure", "Figure"), ("config", "Configuration"), ("help", "Help")]
+
+    def __init__(self, args):
+        QMainWindow.__init__(self)
+        self.panels = {}
+        self.setDockOptions(QMainWindow.DockOption.AnimatedDocks | QMainWindow.DockOption.AllowTabbedDocks |
+                            QMainWindow.DockOption.AllowNestedDocks)
+        self.setTabPosition(Qt.DockWidgetArea.AllDockWidgetAreas, QTabWidget.TabPosition.North)
+        self.fv = FitsView(args, parent=self)
+        self.setCentralWidget(self.fv)
+
+        for kind, title in self.PANELS:
+            self.new_dock(kind, title)
+        query = self.panels["query"]
+        rest = [self.panels[k] for k, t in self.PANELS[1:]]
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, query)
+        self.splitDockWidget(query, rest[0], Qt.Orientation.Vertical)
+        for d in rest[1:]: self.tabifyDockWidget(rest[0], d)
+
+        settings = QSettings("OCA", "FitsView")
+        geo = settings.value("window_geometry")
+        if geo is None or not self.restoreGeometry(geo):
+            gm = eval(str(self.fv.cfg_geometry))
+            self.setGeometry(int(gm[0]), int(gm[1]), int(gm[2]), int(gm[3]))
+            self.resizeDocks([query], [max(380, self.width() // 3)], Qt.Orientation.Horizontal)
+            self.resizeDocks([query, rest[0]], [self.height() // 3, 2 * self.height() // 3], Qt.Orientation.Vertical)
+        fit_to_screen(self)
+        state = settings.value("dock_state")
+        if state is not None: self.restoreState(state)
+        for d in self.panels.values(): d.hide()        # puste - pokaza sie, gdy panel bedzie uzyty (show_panel)
+        self.show()
+        self.raise_()
+
+    def new_dock(self, kind, title):
+        dock = QDockWidget(title, self)
+        dock.setObjectName("fv_" + kind)               # nazwa w zapisanym ukladzie
+        dock.setWidget(QWidget())
+        self.panels[kind] = dock
+        return dock
+
+    def fv_dock(self, win, kind, title):
+        # win do doku swojego rodzaju; widget, ktory tam byl, staje sie ukrytym oknem (wroci przez show_panel)
+        dock = self.panels.get(kind)
+        if dock is None:                               # rodzaj spoza PANELS
+            dock = self.new_dock(kind, title)
+            self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
+            dock.hide()
+        old = dock.widget()
+        if old is not win:
+            if old is not None:
+                old.hide()
+                old.setParent(None)
+            dock.setWidget(win)
+        dock.setWindowTitle(title)
+        win._fv_dock = dock
+
+    def closeEvent(self, event):
+        settings = QSettings("OCA", "FitsView")
+        settings.setValue("window_geometry", self.saveGeometry())
+        settings.setValue("dock_state", self.saveState())
+        for okno in self.fv.active_windows:            # okna poza dokami (np. odpiete z doku przez podmiane)
+            if not docked(okno) or okno.parentWidget() is None: okno.close()   # parent() przesloniety atrybutem
+        QMainWindow.closeEvent(self, event)

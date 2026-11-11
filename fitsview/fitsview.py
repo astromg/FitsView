@@ -24,13 +24,19 @@ def setup_qt():
 def main():
     setup_qt()
     app = QApplication(sys.argv)
+    from fitsview.fv_theme import theme
+    theme.apply_palette()             # motyw (Configuration -> Theme; domyslnie jak w TOI)
 
     cwd=os.getcwd()   # curent working directory
     pwd = __file__    # app location
 
     cfg=[]
     #cfg=["flip_X=True","flip_Y=True","saturation=1000.0","cmap=spectral"]
-    main = FitsView_gui.FitsView(cfg)
+    if FitsView_gui.docking_enabled():             # Configuration -> "Dock panels" (od nastepnego uruchomienia)
+        window = FitsView_gui.FitsViewWindow(cfg)  # FitsView w oknie z dokami (panele); main - sam FitsView
+        main = window.fv
+    else:
+        main = FitsView_gui.FitsView(cfg)          # domyslnie: panele jako osobne okna obok glownego
 
     fits=None
     mi=0
