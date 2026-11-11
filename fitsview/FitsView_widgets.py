@@ -497,6 +497,8 @@ class FFSWindow(QWidget):
             ffs.mk_cosmics_mask(**self.get_params("mk_cosmics_mask"))
         if stage == "lines":
             ffs.mk_threshold_mask(**self.get_params("mk_threshold_mask"))
+            ffs.mk_ring_mask(**self.get_params("mk_ring_mask"))
+            ffs.hough_transform(**self.get_params("hough_transform"))
             ffs.find_lines(**self.get_params("find_lines"))
             ffs.classify_lines(**self.get_params("classify_lines"))
         if stage == "stars":
@@ -791,7 +793,8 @@ class FFSWindow(QWidget):
         frame = [FFS.__init__, FFS.mk_bleeds_mask, FFS.mk_stats]
         sky = [FFS.sky_map]
         cosmics = [FFS.mk_cosmics_mask]
-        lines = [FFS.mk_threshold_mask, FFS.find_lines, FFS.classify_lines]
+        lines = [FFS.mk_threshold_mask, FFS.mk_ring_mask, FFS.hough_transform, FFS.find_lines,
+                 FFS.classify_lines]
         stars = [FFS.find_stars, FFS.star_info, FFS.calc_star_stats, FFS.mk_stars_mask]
         psf = [FFS.mk_star_maps, FFS.calc_star_field_stats]
         fft = [power_spectrum]
