@@ -1360,11 +1360,11 @@ class Image(ImageView):
              fwhm = 2.355*abs(popt[1])
              xx = numpy.linspace(0, d.max(), 300)
              ax.plot(xx, self.gaus(xx, *popt))
-             ax.axvline(fwhm/2., color="C0", ls="--", lw=0.8, label="HWHM Gauss %.2f" % (fwhm/2.))
+             ax.axvline(fwhm/2., color="C0", ls="--", lw=0.8, label="FWHM Gauss %.2f (line at FWHM/2)" % fwhm)
           else:
              amplitude, sky, fwhm = numpy.nan, bkg, numpy.nan
           if numpy.isfinite(s["fwhm"]):
-             ax.axvline(s["fwhm"]/2., color="C1", ls=":", lw=1, label="HWHM FFS %.2f" % (s["fwhm"]/2.))
+             ax.axvline(s["fwhm"]/2., color="C1", ls=":", lw=1, label="FWHM FFS %.2f (line at FWHM/2)" % s["fwhm"])
           ax.set_xlabel("r [px]")
           ax.set_ylabel("ADU")
           if ax.get_legend_handles_labels()[0]: ax.legend(fontsize=7)

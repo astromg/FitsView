@@ -47,7 +47,7 @@ Result will be displayed in a <b>Querry Window</b>, or other specific window. Nu
 <li><b>c</b> : column - count profile in a specific column is plotted. If used with zoomed image, only visible part of the column is plotted.</li>
 <li><b>l</b> : line - count profile in a specific line is plotted. If used with zoomed image, only visible part of the line is plotted.</li>
 <li><b>e</b> : star shape - the star nearest to the cursor (brightest pixel within the aperture), cut-out in the orientation of the image (asinh scale) with isophotes at 10, 25, 50 (thick), 75, 90 % of the peak above background and 3 sigma of the background (dashed), the FWHM ellipse from adaptive moments and its axis. Measured as FFS (star_info): centroid, peak, background, FWHM, ellipticity, theta, CPE, shape, CI; SATURATED when the peak reaches the saturation level.</li>
-<li><b>r</b> : radial profile around the star centre (as <b>e</b>) with a Gaussian fit (started from the data); FWHM from the fit and as FFS measures it, both marked as HWHM lines.</li>
+<li><b>r</b> : radial profile around the star centre (as <b>e</b>) with a Gaussian fit (started from the data); FWHM from the fit and as FFS measures it, legend gives the full FWHM, the lines stand at r = FWHM/2.</li>
 <li><b>x</b> : xternal - magic option for external functions.</li>
 <li><b>&larr; &rarr;</b> : previous / next FITS file in the directory (or in the files given on the command line,
 <i>fv *.fits</i>, or dropped on the window); zoom and centre are kept for frames of the same size.
