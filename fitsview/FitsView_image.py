@@ -49,6 +49,9 @@ def sample(dane, n=1000000):
 
 
 class ImageView(QWidget):
+    # suwaki min / max sa calkowite: wartosc koloru = pozycja suwaka x clim_step (FITS: 1 ADU;
+    # MapTab dobiera krok do zakresu mapy, np. 0.0002 dla eliptycznosci 0-0.2)
+    clim_step = 1
     # Wspolna podstawa zakladek z obrazem: Image (HDU), MapTab, MaskTab (FitsView_maps).
     # Wyswietlanie, zoom, viewfinder, miniatura, flip / rot90, min/max, markery i nakladki,
     # klawisze ogolne (m, d, f, g, l, c). Rysowana jest tylko widoczna zakladka (self.dirty),
@@ -379,8 +382,7 @@ class ImageView(QWidget):
           dane=numpy.rot90(self.dane)
         else: dane=self.dane
 
-        vmin=self.min_s.value()
-        vmax=self.max_s.value()
+        vmin,vmax=self.clim()
 
         self.axes.clear()
         self.axes.set_facecolor(theme.bg())       # clear() przywraca biale tlo osi (widac je obok obrazka)
@@ -459,8 +461,7 @@ class ImageView(QWidget):
           dane=numpy.rot90(self.dane)
         else: dane=self.dane
 
-        vmin=self.min_s.value()
-        vmax=self.max_s.value()
+        vmin,vmax=self.clim()
 
         mymap = self.get_cmap()
         dane2=dane
@@ -485,16 +486,17 @@ class ImageView(QWidget):
 
     def change_clim(self):
 
-        a=self.min_e.text()
-        b=self.max_e.text()
         try:
-          float(a)
-          float(b)
-          ok=True
-        except: ok=False
-        if a<b and ok:
-          self.min_s.setRange(int(float(a)),int(float(b)))
-          self.max_s.setRange(int(float(a)),int(float(b)))
+          a=float(self.min_e.text())/self.clim_step
+          b=float(self.max_e.text())/self.clim_step
+        except ValueError: return
+        if a<b:                                   # wczesniej porownanie tekstow ("900" > "1000")
+          self.min_s.setRange(int(numpy.floor(a)),int(numpy.ceil(b)))
+          self.max_s.setRange(int(numpy.floor(a)),int(numpy.ceil(b)))
+
+    def clim(self):
+        # zakres kolorow (vmin, vmax) z suwakow
+        return self.min_s.value()*self.clim_step, self.max_s.value()*self.clim_step
 
     def clim_auto(self):
         probka = sample(self.dane)
@@ -601,7 +603,7 @@ class ImageView(QWidget):
        counts=self.pixel_value(x,y)
        xr,yr=self.to_orig(x,y)
 
-       txt = "%.2f %.2f %d"% (xr,yr,counts)
+       txt = "%.2f %.2f %s"% (xr,yr,self.value_text(counts))
        self.coor_l.setText(txt)
 
        try:
@@ -669,12 +671,9 @@ class ImageView(QWidget):
 
 
     def zmiana_vmin(self):
-       vmin=self.min_s.value()
-       vmax=self.max_s.value()
-
-       if vmin>vmax:
-          vmax=vmin+0.1
-          self.max_s.setValue(int(vmax))
+       if self.min_s.value()>self.max_s.value():
+          self.max_s.setValue(self.min_s.value())
+       vmin,vmax=self.clim()
 
        self.image.set_clim(vmin=vmin,vmax=vmax)
        self.image_viewfinder.set_clim(vmin=vmin,vmax=vmax)
@@ -684,12 +683,9 @@ class ImageView(QWidget):
        self.canvas_small.draw()
 
     def zmiana_vmax(self):
-       vmin=self.min_s.value()
-       vmax=self.max_s.value()
-
-       if vmax<vmin:
-          vmin=vmax-0.1
-          self.min_s.setValue(int(vmin))
+       if self.max_s.value()<self.min_s.value():
+          self.min_s.setValue(self.max_s.value())
+       vmin,vmax=self.clim()
 
        self.image.set_clim(vmin=vmin,vmax=vmax)
        self.image_viewfinder.set_clim(vmin=vmin,vmax=vmax)
@@ -720,6 +716,10 @@ class ImageView(QWidget):
         if self.parent.cfg_rot90:
             return len(self.dane[0]) - 1 - Y, X
         return X, Y
+
+    def value_text(self, v):
+        # wartosc piksela za wspolrzednymi (nad obrazem); MapTab i MaskTab maja wlasny format
+        return "%d" % v if numpy.isfinite(v) else str(v)
 
     def pixel_value(self, X, Y):
         # wartosc piksela pod punktem ekranu (X, Y)

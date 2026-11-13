@@ -14,7 +14,7 @@ astropy = ">=6.0"
 pyqt6 = ">=6.7"            # jak TOI; import przez fitsview/PyQtX (bez PyQt6 - PyQt5)
 scipy = "^1.11"
 numpy = ">=1.24.1"
-pyaraucaria = { path = "./../pyaraucaria", develop = true }
+pyaraucaria = {git = "https://github.com/araucaria-project/pyaraucaria.git"}   # master, jak TOI
 
 
 [tool.poetry.scripts]

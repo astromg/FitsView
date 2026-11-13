@@ -32,9 +32,14 @@ class MapTab(FitsView_image.ImageView):
         # NaN zostaja (np. poza wycinkiem FFS) - na obrazie puste
         return numpy.array(data, dtype=float)
 
+    def value_text(self, v):
+        return "%.4g" % v                      # mapy: ulamki (FWHM, theta w rad), NaN -> nan
+
     def initiatie(self):
         FitsView_image.ImageView.initiatie(self)
-        self.cmap_s.setCurrentText("viridis")
+        cmap = self.zestaw().get("cmap") or "viridis"
+        if self.cmap_s.findText(cmap) < 0: self.cmap_s.addItem(cmap)      # np. twilight (cykliczna, dla katow)
+        self.cmap_s.setCurrentText(cmap)
 
     def get_cmap(self):
         return matplotlib.colormaps[self.cmap_s.currentText()]
@@ -51,14 +56,20 @@ class MapTab(FitsView_image.ImageView):
         dane = dane[numpy.isfinite(dane)]
         if dane.size == 0: dane = numpy.array([0., 1.])
         a, b = numpy.percentile(dane, [0.5, 99.5])
-        a, b = int(numpy.floor(a)), int(numpy.ceil(b))
-        if b <= a: b = a + 1
-        self.min_e.setText("%i" % a)
-        self.max_e.setText("%i" % b)
-        self.min_s.setRange(a, b)
-        self.max_s.setRange(a, b)
-        self.min_s.setValue(a)
-        self.max_s.setValue(b)
+        if b <= a: b = a + max(abs(a), 1.) * 1e-3          # mapa stala
+        # krok suwaka: potega 10, zakres to 1000-10000 pozycji (eliptycznosc 0-0.2 -> 0.0001)
+        self.clim_step = 10. ** numpy.floor(numpy.log10((b - a) / 1000.))
+        lo, hi = int(numpy.floor(a / self.clim_step)), int(numpy.ceil(b / self.clim_step))
+        self.min_e.blockSignals(True)                       # zakres suwakow ustawiany nizej, raz
+        self.max_e.blockSignals(True)
+        self.min_e.setText("%.4g" % (lo * self.clim_step))
+        self.max_e.setText("%.4g" % (hi * self.clim_step))
+        self.min_e.blockSignals(False)
+        self.max_e.blockSignals(False)
+        self.min_s.setRange(lo, hi)
+        self.max_s.setRange(lo, hi)
+        self.min_s.setValue(lo)
+        self.max_s.setValue(hi)
 
     def mkUI(self):
         FitsView_image.ImageView.mkUI(self)
@@ -101,10 +112,14 @@ class MaskTab(MapTab):
     def mk_dane(self,data):
         return numpy.asarray(data, dtype=bool)
 
+    def value_text(self, v):
+        return str(bool(v))
+
     def get_cmap(self):
         return matplotlib.colormaps["gray_r"]
 
     def clim_auto(self):
+        self.clim_step = 1
         self.min_e.setText("0")
         self.max_e.setText("1")
         self.min_s.setRange(0, 1)

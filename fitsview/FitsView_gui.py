@@ -368,7 +368,8 @@ class FitsView(QWidget):
 
         self.update_tabs()
 
-    def add_map(self,data,name="map",description="",frame=True):
+    def add_map(self,data,name="map",description="",frame=True,cmap=None):
+        # cmap: domyslna mapa kolorow zakladki (None - viridis), np. twilight dla katow
         # frame=False: dane nie w ukladzie klatki (np. widmo Fouriera) - bez markerow i masek na zakladce
         i = self.find_data(self.map_data,name)
         if i is None:
@@ -379,6 +380,7 @@ class FitsView(QWidget):
         tmp["description"] = description
         tmp["hidden"] = False
         tmp["frame"] = frame
+        tmp["cmap"] = cmap
 
         old = tmp["tab"]
         tmp["tab"] = FitsView_maps.MapTab(self, i)

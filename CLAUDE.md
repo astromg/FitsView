@@ -16,7 +16,7 @@ module.
 Dependencies are managed with Poetry.
 
 ```console
-poetry install                 # install dependencies (uses poetry.lock)
+poetry install                 # install dependencies (poetry.lock is gitignored)
 poetry run FitsView file.fits  # run the app (entry point defined in pyproject.toml)
 poetry run fv file.fits        # same, shorter alias
 ```
@@ -103,18 +103,28 @@ Helper windows (Query, Profile, Radial profile, Isophotes, FFS, Header, Figure, 
   range from the saturation up, open circles). Lines use the normal `ffs.lines` table. The "Run fast" button (next to "Run all"; earlier "TOI run", "calc_frame_fwhm") runs it
   on the whole frame. Keep constants in sync with TOI `fits_gui.py` by hand.
 
+## Maps: value label, colour range, psf field (2026-11-13)
+
+- The label after the coordinates shows the current tab's value: `ImageView.value_text` (FITS `%d`, `MapTab` `%.4g`,
+  `MaskTab` True/False).
+- Min/max sliders are integer; colour = slider position x `clim_step` (`ImageView.clim()`; FITS 1, `MapTab.clim_auto`
+  picks a power of 10 for 1000-10000 steps). Read the range through `clim()`, never `min_s.value()` directly.
+- `add_map(..., cmap=None)`: default colormap of a map tab (`psf_theta` -> cyclic `twilight`).
+- FFS product type `field`, `psf field` (tab `ffs.psf field`): the `psf_ellipticity` map with the `psf grid` table's
+  lines over it (catalog tables draw on all image tabs — no own drawing). Lines without heads: ellipticity is an axis.
+
 ## Local dependency: pyaraucaria
 
-`pyaraucaria` is declared in `pyproject.toml` as a local, editable path dependency
-(`../pyaraucaria`), i.e. it is expected to live as a sibling directory to this repo, not to be
-fetched from PyPI. The FFS (Frame Fits Statistics) integration (`FFS` class, used from the `s` key
+`pyaraucaria` is declared in `pyproject.toml` as a git dependency on its `master`
+(`{git = "https://github.com/araucaria-project/pyaraucaria.git"}`, as in TOI; since 2026-11-13, before it was the path
+`../pyaraucaria`). `poetry.lock` is gitignored, so every install takes the current `master`. The FFS (Frame Fits Statistics) integration (`FFS` class, used from the `s` key
 handler in the image view) comes from `pyaraucaria.ffs`. If `pyaraucaria` is missing or its API
 changes, the FFS-related features (`FitsView_widgets.FFSWindow`) will break independently of this
 codebase.
 
-The pipx install (`fv`, `FitsView`) holds **copies** of both FitsView and pyaraucaria, not the
-sibling checkout — after changing either, `pipx install --force .` (or `pipx reinstall fitsview`)
-before testing with `fv`, or run from source with `PYTHONPATH=.:../pyaraucaria`.
+The pipx install (`fv`, `FitsView`) holds **copies**: FitsView from the working tree, pyaraucaria from GitHub
+`master` — FFS changes reach `fv` only after they are pushed to pyaraucaria `master` and `pipx install --force .`.
+To test unpushed FFS changes (e.g. on `mgorski_dev`), run from source with `PYTHONPATH=.:../pyaraucaria`.
 
 ### FFT (Fourier) is FitsView's, not FFS's (2026-11-08)
 FFS (`pyaraucaria.ffs`) is developed by hand by its author and holds only frame statistics, stars,

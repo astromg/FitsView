@@ -365,6 +365,9 @@ class FFSWindow(QWidget):
     # maski do wyboru w menu exclude oprocz FFS.EXCLUDE_ALL: przelania ladunku (mk_bleeds_mask) nie sa w zadnej
     # domyslnej liscie FFS (sa podzbiorem saturacji), ale moze byc potrzeba pominac tylko je
     EXTRA_EXCLUDE = ("bleeds",)
+    FIELD_DESCRIPTION = ("PSF field: colour - ellipticity map (psf_ellipticity), lines - PSF axis on a grid (psf grid table: "
+                         "direction theta, length ~ ellipticity); both from the same Gaussian-weighted mean of e1, e2 of the "
+                         "stars (mk_star_maps)")
     TABLES = {"sky segments": "sky", "bleeds": "bleeds", "lines": "lines", "stars": "stars", "psf grid": "psf_grid"}
     # Run all: kolejnosc jak FFS.calc_frame_fwhm, na koniec tlo i statystyki jeszcze raz, juz z maskami
     RUN_ALL = ["stats", "sky", "cosmics", "lines", "stars", "sky", "stats", "psf"]
@@ -507,6 +510,8 @@ class FFSWindow(QWidget):
         if ffs.stars is not None:
             for name in self.toi_views: out[("table", name)] = ffs.stars
         if self.fourier is not None: out[("fft", "fourier")] = self.fourier
+        if "psf_ellipticity" in ffs.maps and ffs.psf_grid is not None:
+            out[("field", "psf field")] = ffs.maps["psf_ellipticity"]
         return out
 
     def step(self, stage):
@@ -663,6 +668,8 @@ class FFSWindow(QWidget):
         if ffs.stars is not None:
             for name, v in self.toi_views.items(): self.products.append(("table", name, v["description"]))
         if ffs.psf_grid is not None: self.products.append(("table", "psf grid", "PSF on a grid, drawn as whiskers: direction theta, length ~ ellipticity, the longest 0.9 of a cell (mk_star_maps)"))
+        if "psf_ellipticity" in ffs.maps and ffs.psf_grid is not None:
+            self.products.append(("field", "psf field", self.FIELD_DESCRIPTION))
 
         self.products_t.blockSignals(True)
         self.products_t.setRowCount(len(self.products))
@@ -682,7 +689,8 @@ class FFSWindow(QWidget):
     def gui_entry(self, typ, name):
         # wpis produktu w table_data / map_data / mask_data glownego okna, albo None
         gui = self.parent.parent
-        lista = {"mask": gui.mask_data, "map": gui.map_data, "fft": gui.map_data, "table": gui.table_data}[typ]
+        lista = {"mask": gui.mask_data, "map": gui.map_data, "fft": gui.map_data, "field": gui.map_data,
+                 "table": gui.table_data}[typ]
         i = gui.find_data(lista, self.tab_name(typ, name))
         return None if i is None else lista[i]
 
@@ -692,6 +700,7 @@ class FFSWindow(QWidget):
 
     def hide_product(self, typ, name):
         if self.shown(typ, name): self.parent.parent.hide_tab(self.gui_entry(typ, name)["tab"])
+        if typ == "field": self.hide_product("table", "psf grid")       # linie pola rysuje tabela psf grid
 
     def product_checked(self, item):
         if item.column() != 0: return
@@ -718,6 +727,7 @@ class FFSWindow(QWidget):
             if typ == "mask": self.ffs.masks.pop(name, None)
             elif typ == "map": self.ffs.maps.pop(name, None)
             elif typ == "fft": self.fourier = self.fft_peak = None
+            elif typ == "field": pass                                   # tylko widok: mapa i tabela zostaja
             elif name in self.toi_views: del self.toi_views[name]      # tylko widok, tabela gwiazd zostaje
             else: setattr(self.ffs, self.TABLES[name], None)
             self.product_step.pop((typ, name), None)
@@ -727,7 +737,7 @@ class FFSWindow(QWidget):
 
     def tab_name(self, typ, name):
         # np. maska "lines" i tabela "lines" musza miec rozne zakladki
-        if typ in ("table", "fft"): return "ffs." + name
+        if typ in ("table", "fft", "field"): return "ffs." + name
         return "ffs.%s %s" % (name, typ)
 
     def show_product(self, typ, name):
@@ -736,7 +746,14 @@ class FFSWindow(QWidget):
         if typ == "mask":
             gui.add_mask(self.full_frame(ffs.masks[name], False), name=self.tab_name(typ, name), description=ffs.masks_description.get(name, ""))
         elif typ == "map":
-            gui.add_map(self.full_frame(ffs.maps[name], numpy.nan), name=self.tab_name(typ, name), description=ffs.maps_description.get(name, ""))
+            gui.add_map(self.full_frame(ffs.maps[name], numpy.nan), name=self.tab_name(typ, name), description=ffs.maps_description.get(name, ""),
+                        cmap="twilight" if name == "psf_theta" else None)     # kat ma okres pi: cykliczna skala
+        elif typ == "field":
+            # pole PSF jak wiatr na mapie pogody: tlo - mapa eliptycznosci, na niej linie tabeli psf grid
+            # (kierunek theta, dlugosc ~ eliptycznosc); tabele rysuja sie na wszystkich zakladkach obrazu
+            self.show_product("table", "psf grid")
+            gui.add_map(self.full_frame(ffs.maps["psf_ellipticity"], numpy.nan), name=self.tab_name(typ, name),
+                        description=self.FIELD_DESCRIPTION)
         elif typ == "fft":
             # widmo w rozmiarze wycinka, nie w ukladzie klatki - bez full_frame
             desc = [d for t, n, d in self.products if t == typ and n == name]
@@ -748,7 +765,8 @@ class FFSWindow(QWidget):
         elif typ == "table":
             table = getattr(ffs, self.TABLES[name])
             if name == "psf grid": table = self.whiskers(table)
-            gui.add_coo(self.shift_table(table), name=self.tab_name(typ, name))
+            gui.add_coo(self.shift_table(table), name=self.tab_name(typ, name),
+                        color="red" if name == "psf grid" else None)        # widoczne na mapie viridis
         self.update_products()
 
     def whiskers(self, table):
