@@ -31,6 +31,11 @@ Unpushed pyaraucaria changes: run from source, `PYTHONPATH=.:../pyaraucaria pyth
 ```./FitsView.py plik.fits plik.out```  #  mark all point from plik.out  
 ```fv *.fits```  #  open the first, browse the given files with ← →  
 
+**Open...** opens FITS images and tables (several at once): an image opens as a new frame (several images: browse
+with ← →), a table (daophot `.coo .ap .lst .als .out .tfr .rsl`, text, FITS table) is shown on the current frame.
+The list next to it offers tables with the frame's name from its directory (choosing one loads it). The same rules
+apply to files dropped on the window and to command-line arguments.  
+
 
 ### Basic functions and layout of the program.
 

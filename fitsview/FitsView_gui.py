@@ -46,6 +46,27 @@ def is_fits_name(name):
     return str(name).lower().endswith(FITS_EXT)
 
 
+def strip_fits_ext(name):
+    # nazwa bez rozszerzenia FITS (f1.fits.fz -> f1)
+    for ext in sorted(FITS_EXT, key=len, reverse=True):
+        if str(name).lower().endswith(ext): return str(name)[:-len(ext)]
+    return str(name)
+
+
+def file_kind(path):
+    # "image" - FITS z obrazem 2D / 3D (nowa klatka); "table" - pozostale: pliki daophot i tekstowe,
+    # FITS z samymi tabelami (katalog) - dolaczane do biezacej klatki. Czyta tylko naglowki.
+    if not is_fits_name(path): return "table"
+    with fits.open(path, lazy_load_hdus=True) as hdul:
+        for h in hdul:
+            if h.is_image and h.header.get("NAXIS", 0) >= 2: return "image"
+    return "table"
+
+# filtr okna "Open...": obrazy FITS i tabele (daophot, tekstowe, FITS z tabelami)
+OPEN_FILTER = ("FITS images and tables (*.fits *.fit *.fts *.fz *.gz *.coo *.ap *.lst *.als *.out *.tfr *.rsl "
+               "*.txt *.dat *.csv *.ecsv);;All files (*)")
+
+
 class FitsView(QWidget):
     def __init__(self,args,parent=None):
         # parent: FitsViewWindow (samodzielnie, z dokami) albo None (wlasne okno, np. osadzony w innym programie)
@@ -162,22 +183,41 @@ class FitsView(QWidget):
     def dropEvent(self, event):
         # przeciagniete pliki: FITS - pierwszy otwierany, kilka - przegladane strzalkami jak fv *.fits;
         # pozostale pliki - jako coo (jak drugi argument linii polecen), do biezacej klatki
-        paths = [u.toLocalFile() for u in event.mimeData().urls() if u.isLocalFile()]
-        fits_files = [p for p in paths if is_fits_name(p)]
-        coo = [p for p in paths if not is_fits_name(p) and os.path.isfile(p)]
         event.acceptProposedAction()
-        # wyjatek w obsludze zdarzenia Qt (PyQt6) zamknalby caly program - np. zly plik coo
+        self.open_files([u.toLocalFile() for u in event.mimeData().urls() if u.isLocalFile()])
+
+    def open_files(self, paths):
+        # jedno wejscie dla "Open...", przeciagania i linii polecen. Obrazy FITS (file_kind): pierwszy otwierany,
+        # kilka - przegladane strzalkami (browse_files); tabele dolaczane do klatki (tej z pierwszego obrazu
+        # albo juz wyswietlanej). Bledy jako komunikat: wyjatek w obsludze zdarzenia Qt (PyQt6) zamknalby program.
+        paths = [str(p) for p in paths if p]
+        missing = [p for p in paths if not os.path.isfile(p)]
         try:
-            if fits_files:
-                self.browse_files = [os.path.abspath(p) for p in fits_files] if len(fits_files) > 1 else None
-                self.fname = fits_files[0]
+            kinds = {p: file_kind(p) for p in paths if p not in missing}
+        except Exception as e:
+            self.errmssg("cannot read:\n%s" % e)
+            return
+        images = [p for p, k in kinds.items() if k == "image"]
+        tables = [p for p, k in kinds.items() if k == "table"]
+        try:
+            if images:
+                self.browse_files = [os.path.abspath(p) for p in images] if len(images) > 1 else None
+                self.fname = images[0]
                 self.newFits()
-            if coo and hasattr(self, "hdu"):
-                for p in coo:
+            if tables and not hasattr(self, "hdu"):
+                self.errmssg("Open a FITS image first - tables are shown on the current image:\n" + "\n".join(tables))
+            elif tables:
+                for p in tables:
                     self.coo_file = p
                     self.load_coo()
         except Exception as e:
-            self.errmssg("cannot open dropped file:\n%s" % e)
+            self.errmssg("cannot open:\n%s" % e)
+        if missing: self.errmssg("no such file:\n" + "\n".join(missing))
+
+    def open_dialog(self):
+        # przycisk "Open...": obrazy i tabele naraz (wiele plikow); co z nimi zrobic, mowi zawartosc (open_files)
+        paths, _ = QFileDialog.getOpenFileNames(self, "Open FITS images or tables", self.fits_directory, OPEN_FILTER)
+        if paths: self.open_files(paths)
 
     def prefetch(self):
         # Nastepny plik w kierunku przegladania (strzalki) czytany w tle - trafia do pamieci podrecznej
@@ -227,9 +267,17 @@ class FitsView(QWidget):
           self.ext_y=[]
           self.ext_l=[]
 
-          self.map_data=[]       # mapy, maski i widok naleza do poprzedniej klatki
+          # tabele (coo, wyniki FFS: linie, gwiazdy, psf grid), mapy, maski i widok naleza do poprzedniej
+          # klatki - bez czyszczenia table_data markery i linie rysowaly sie dalej na nowej klatce
+          self.table_data=[]
+          self.map_data=[]
           self.mask_data=[]
           self.view=None
+          # okno FFS poprzedniej klatki: jego "Show" dodawaloby wyniki starej klatki do nowej
+          for okno in list(self.active_windows):
+             if hasattr(okno, "update_products"):
+                close_panel(okno)
+                self.active_windows.remove(okno)
 
 
           try:
@@ -249,16 +297,18 @@ class FitsView(QWidget):
           self.msg.exec()
 
     def updateCooList(self):
-       basename=self.fname.replace(".fits","").split("/")[-1]
-       opcje = [f for f in os.listdir(self.fits_directory) if basename in f]
-       opcje=["other file"]+opcje
-       if self.fname.split("/")[-1] in opcje: opcje.remove(self.fname.split("/")[-1])
+       # podpowiedzi tabel do biezacej klatki: pliki z jej nazwa w katalogu (f1.coo, f1.ap, ...), bez plikow FITS
+       basename = strip_fits_ext(os.path.basename(str(self.fname)))
+       try: opcje = sorted(f for f in os.listdir(self.fits_directory) if basename in f and not is_fits_name(f))
+       except OSError: opcje = []
        self.coo_l.clear()
-       self.coo_l.addItems(opcje)
-       self.coo_p.setStyleSheet("")
+       self.coo_l.addItems(["tables: other file..."] + opcje)
 
-    def coo_index_changed(self):
-       self.coo_p.setStyleSheet("color: %s;" % theme.c("warn2_fg"))     # wybrany inny plik, jeszcze nie wczytany
+    def coo_activated(self, i):
+       # wybor z listy od razu wczytuje tabele; "other file..." - okno wyboru (jak Open...)
+       if i <= 0: self.open_dialog()
+       else: self.open_files([os.path.join(self.fits_directory, self.coo_l.itemText(i))])
+       self.coo_l.setCurrentIndex(0)
 
 
     def open_confWindow(self):
@@ -299,8 +349,11 @@ class FitsView(QWidget):
        self.TabWindow=QTabWidget()
        self.TabWindow.tabBarClicked.connect(self.curent_tab_changed)
 
-       self.load_p = QPushButton("Load FITS")
-       self.load_p.clicked.connect(self.load_fits)
+       self.open_p = QPushButton("Open...")
+       self.open_p.setToolTip("Open FITS images or tables (several at once). An image opens as a new frame "
+                              "(several: browse with arrows), a table (daophot, text, FITS table) is shown on "
+                              "the current frame. Files can also be dropped on the window.")
+       self.open_p.clicked.connect(self.open_dialog)
        self.close_p = QPushButton("Close")
        self.close_p.clicked.connect(self.zamknij)
 
@@ -313,10 +366,9 @@ class FitsView(QWidget):
        linia = QtGui.QFontMetrics(QtGui.QFont("Courier New")).lineSpacing()
        self.hinfo_e.setFixedHeight(3*linia + 2*self.hinfo_e.frameWidth() + int(2*self.hinfo_e.document().documentMargin()) + 2)
 
-       self.coo_p = QPushButton("Load COO")
-       self.coo_p.clicked.connect(self.get_coo)
        self.coo_l=QComboBox()
-       self.coo_l.currentIndexChanged.connect(self.coo_index_changed)
+       self.coo_l.setToolTip("Tables for the current frame: files with its name in the directory; choosing one loads it")
+       self.coo_l.activated.connect(self.coo_activated)
 
        self.config_p = QPushButton("Configuration")
        self.config_p.clicked.connect(self.open_confWindow)
@@ -338,9 +390,8 @@ class FitsView(QWidget):
        grid.addWidget(self.TabWindow,w,0,4,5)
 
        w = 8
-       grid.addWidget(self.load_p,w,0)
-       grid.addWidget(self.coo_p,w,1)
-       grid.addWidget(self.coo_l,w,2)
+       grid.addWidget(self.open_p,w,0)
+       grid.addWidget(self.coo_l,w,1,1,2)
        grid.addWidget(self.prev_p,w,3)
        grid.addWidget(self.next_p,w,4)
 
@@ -365,22 +416,6 @@ class FitsView(QWidget):
           self.help_window = HelpWindow(self,tmp)
           self.active_windows.append(self.help_window)
        show_panel(self.help_window)
-
-
-    def get_coo(self):
-       if self.coo_l.currentIndex()==0:
-          ok=False
-          try:
-            self.coo_file = str(QFileDialog.getOpenFileName(self, 'Open file','.')[0] )
-            ok=True
-          except: ok=False
-          if ok:
-              if self.coo_file != None:
-                  self.load_coo()
-       else:
-          self.coo_file=self.coo_l.currentText()
-          if self.coo_file != None:
-              self.load_coo()
 
 
     def update_tabs(self):
@@ -507,6 +542,10 @@ class FitsView(QWidget):
 
             if self.coo_file.endswith((".ap",".coo",".out",".als",".lst")):
                 data = daophot_files_parser(self.coo_file)
+                check1 = True
+
+            elif is_fits_name(self.coo_file):        # FITS z tabela (katalog): pierwsza tabela w pliku
+                data = Table.read(self.coo_file)
                 check1 = True
 
             else:
@@ -696,11 +735,8 @@ class FitsView(QWidget):
        self.hinfo_e.insertPlainText(tmp)
 
 
-    def load_fits(self):
-       self.fname = str( QFileDialog.getOpenFileName(self, 'Open file',self.fits_directory)[0] )
-       if len(self.fname) > 0:
-         self.fits_directory = os.path.dirname(self.fname)
-         self.newFits()
+    def load_fits(self):                  # dawny przycisk "Load FITS"
+       self.open_dialog()
 
 
     def errmssg(self,txt):

@@ -625,21 +625,19 @@ class FFSWindow(QWidget):
 
         self.update_products()
 
-        # tabele gwiazd i linii od razu na Image, reszta na zadanie
-        if stage in ("stats", "all") and ffs.bleeds is not None and len(ffs.bleeds):
-            self.show_product("table", "bleeds")
-        if stage in ("lines", "all") and ffs.lines is not None:
-            self.show_product("table", "lines")
-        if stage in ("stars", "all") and ffs.stars is not None:
-            self.show_product("table", "stars")
+        # tabele gwiazd i linii od razu na Image (puste - bez zakladki; stara zakladka znika), reszta na zadanie
+        if stage in ("stats", "all"): self.auto_show("table", "bleeds")
+        if stage in ("lines", "all"): self.auto_show("table", "lines")
+        if stage in ("stars", "all"): self.auto_show("table", "stars")
         if stage in ("stars", "all") and "fwhm" in ffs.stats["frame"]:
             self.pole_e.append("frame_fwhm: %.2f  ellipticity: %.2f  used_stars: %d" % (
                 ffs.stats["frame"]["fwhm"], ffs.stats["frame"]["ellipticity"], ffs.stats["frame"]["used_stars"]))
 
         if stage == "fast":
             # oznaczenia jak w TOI zwyklymi tabelami: linie (odcinki) i gwiazdy z zakresem kolumny (suwaki)
-            if ffs.lines is not None: self.show_product("table", "lines")
-            if ffs.stars is not None:
+            self.auto_show("table", "lines")
+            self.auto_show("table", "stars")                 # pelna tabela gwiazd, obok widokow jak w TOI
+            if ffs.stars is not None and len(ffs.stars):
                 for name in self.toi_views: self.show_product("table", name)
             self.pole_e.append("<b>Run fast</b> (calc_frame_fwhm as in TOI, whole frame):<br>" + self.toi_html)
 
@@ -651,7 +649,19 @@ class FFSWindow(QWidget):
 
         # widoczne zakladki produktow zmienionych w tym run() - odswiezamy (schowane zostaja schowane)
         for typ, name, opis in self.products:
-            if (typ, name) in self.changed and self.shown(typ, name): self.show_product(typ, name)
+            if (typ, name) in self.changed and self.shown(typ, name): self.auto_show(typ, name)
+
+    def empty_table(self, typ, name):
+        # tabela produktu bez wierszy (albo jeszcze nie policzona)
+        if typ != "table": return False
+        table = self.ffs.stars if name in self.toi_views else getattr(self.ffs, self.TABLES[name], None)
+        return table is None or len(table) == 0
+
+    def auto_show(self, typ, name):
+        # pokazanie po liczeniu: pusta tabela (np. brak linii) nie dostaje zakladki, a jej stara zakladka znika
+        if self.empty_table(typ, name): self.hide_product(typ, name)
+        else: self.show_product(typ, name)
+        self.update_products()
 
     def update_products(self):
         # tabela produktow: shown (zakladka otwarta; klikniecie pokazuje / chowa), typ, nazwa, krok

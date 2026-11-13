@@ -309,7 +309,9 @@ class ImageView(QWidget):
 
                             mask = ~numpy.isnan(val)
                             norm_val = numpy.zeros_like(val)
-                            norm_val[mask] = (val[mask] - numpy.min(val[mask])) / (numpy.max(val[mask]) - numpy.min(val[mask]))
+                            if mask.any():          # zakres moze nie zawierac zadnego obiektu (np. "stars saturated")
+                                lo, hi = numpy.min(val[mask]), numpy.max(val[mask])
+                                norm_val[mask] = (val[mask] - lo) / (hi - lo if hi > lo else 1.)
 
                             edge_colors = numpy.zeros((len(val), 4))
                             edge_colors[mask] = VALUE_CMAP(norm_val[mask])

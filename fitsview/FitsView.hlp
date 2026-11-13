@@ -14,7 +14,11 @@ On the right side the upper window shows <font color="blue">vievfinder</font>
 window with <font color="blue">aperture</font> marked as the green circle. 
 Below is the <font color="blue">thumbnail</font> of the main image. 
 You can <font color="blue">zoom</font> with the slider below this window, or with the mouse wheel over the main image or the thumbnail (around the cursor). 
-FITS and coordinate files can be dragged onto the window. 
+<br><font color="green">Open...</font> opens FITS images and tables (several at once): an image opens as a new frame
+(several images: browse them with the arrows), a table (daophot <i>.coo .ap .lst .als .out .tfr .rsl</i>, text, FITS
+table) is shown on the current frame. The list next to it offers tables with the frame's name from its directory -
+choosing one loads it. Files can also be dragged onto the window, or given on the command line
+(<i>fv f1.fits f1.coo</i>). 
 You can navigate by left-clicking on the main image, 
 or by left-clicking on the thumbnail. 
 <br>  

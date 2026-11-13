@@ -124,6 +124,15 @@ Helper windows (Query, Profile, Radial profile, Isophotes, FFS, Header, Figure, 
 - Esc: `fv_windows.close_last_panel()` (order kept by `show_panel`); `init_panel` adds an Esc shortcut to each panel.
   `?` shows `KEYS_HELP` as a tooltip. Mouse wheel zooms on the thumbnail too (`mouse_scroll`, same coordinates).
 - Exceptions in Qt event handlers (e.g. `dropEvent`) abort the program in PyQt6 — catch them and show `errmssg`.
+- One entry for files: `FitsView.open_files(paths)` ("Open..." `open_dialog`, `dropEvent`, command line).
+  `file_kind(path)` (headers only): FITS with a 2D/3D image HDU -> "image" (new frame; several -> `browse_files`),
+  anything else (daophot, text, FITS with tables only) -> "table" (`load_coo` on the current frame). The combo
+  `coo_l` lists non-FITS files with the frame's name and loads on `activated`. Old "Load FITS" / "Load COO" are gone
+  (`load_fits` kept as an alias of `open_dialog`). `_ffs.fits` (Save MEF) counts as an image for now.
+- FFS window: tables are shown after a run through `FFSWindow.auto_show` - an empty table gets no tab (its old tab
+  is hidden); "Run fast" also opens the full `ffs.stars` table next to the TOI views.
+- `newFits` drops everything of the previous frame: `table_data` (coo, FFS tables), `map_data`, `mask_data`, the
+  view (unless `keep_view`), and closes the old FFS window (its "Show" would add old products to the new frame).
 
 ## Local dependency: pyaraucaria
 

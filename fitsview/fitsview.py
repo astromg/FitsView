@@ -38,17 +38,15 @@ def main():
     else:
         main = FitsView_gui.FitsView(cfg)          # domyslnie: panele jako osobne okna obok glownego
 
-    fits_files=[]       # fv *.fits: pierwszy otwierany, wszystkie przegladane strzalkami
-    mi=0
+    # pliki (obrazy FITS i tabele - rozpoznaje je FitsView.open_files, jak "Open..." i przeciaganie) albo x y punktu:
+    # fv f1.fits | fv *.fits (przegladanie strzalkami) | fv f1.fits f1.coo | fv f1.fits 400 500
+    files=[]
     mx=False
     my=False
-    coo=False
 
     for a in sys.argv[1:]:
-        if FitsView_gui.is_fits_name(a):
-           fits_files.append(a)
-        elif os.path.isfile(a) and ".py" not in a:
-          coo=a
+        if FitsView_gui.is_fits_name(a) or (os.path.isfile(a) and ".py" not in a):
+           files.append(a)
         else:
           if not mx:
              try: mx=float(a)
@@ -60,21 +58,14 @@ def main():
     #main.config_file="special.cfg"           # load with predifined configuration file
     #main.conf()
 
-    if fits_files:
-       if len(fits_files) > 1: main.browse_files=[os.path.abspath(f) for f in fits_files]
-       main.fname=fits_files[0]
-       main.newFits()
+    if files:
+       main.open_files(files)
 
-    if mx and my:
+    if mx and my:                       # po tabelach: load_coo czysci ext_x / ext_y
        main.ext_x=[mx]
        main.ext_y=[my]
        main.ext_l=["p1"]   # label tego punktu ktory chcemy zaznaczyc
        main.update()
-
-    if coo:
-        main.coo_file=coo
-        if main.coo_file!=None:
-            main.load_coo()
 
 
     sys.exit(app.exec())
