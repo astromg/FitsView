@@ -7,6 +7,19 @@ Python Fits Viewer - **FitsView**
 ### Reguirements:
 *python3, PyQt6 (PyQt5 still works), astropy, numpy, matplotlib, scipy*  
 
+### Install / reinstall (pipx):
+
+```console
+cd FitsView
+pipx install .              # first install: commands fv and FitsView
+pipx install --force .      # reinstall after changes in FitsView (git pull) or in pyaraucaria
+```
+
+`pipx install` copies the code: FitsView from this directory, **pyaraucaria from GitHub `master`**
+(`pyproject.toml`). Changes are visible in `fv` only after the reinstall; pyaraucaria changes only after they are
+pushed to its `master`. `pipx reinstall fitsview` does the same from anywhere.
+Unpushed pyaraucaria changes: run from source, `PYTHONPATH=.:../pyaraucaria python3 fitsview/fitsview.py file.fits`.
+
 ### Run:
 
 ```console
@@ -88,15 +101,6 @@ FV_window.special=False
 FV_window.com.xPressed.disconnect(self.stopFunction) 
 ```
 
-### Install:
-```console
-pipx install .
-```
-
-### Reinstall:
-```console
-pipx reinstall fitsview
-```
 #### Libraries:
 
 Python3  
