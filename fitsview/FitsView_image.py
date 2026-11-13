@@ -23,7 +23,7 @@ from scipy.optimize import curve_fit
 
 from fitsview import FitsView_widgets, fv_star
 from fitsview.fv_theme import theme
-from fitsview.fv_windows import show_panel, close_last_panel
+from fitsview.fv_windows import show_panel, close_last_panel, panel_visible
 
 
 # kolorowanie markerow wg kolumny "color" (Catalog): dwa kolory, niebieski - najmniejsza wartosc, czerwony - najwieksza
@@ -89,8 +89,7 @@ class ImageView(QWidget):
         self.optiones=False
 
 
-        self.hline=False
-        self.vline=False
+        self.profile_line=None     # ("column", x) / ("line", y) we wspolrzednych oryginalu - klawisze c, l
 
 
         self.mkUI()
@@ -254,6 +253,8 @@ class ImageView(QWidget):
         for im in list(self.axes.images):     # wypelnienia masek; obraz zostaje
             if im is not self.image: im.remove()
 
+        self.draw_profile_line()
+
         for zestaw in self.parent.table_data:
             if zestaw.get("hidden"): continue           # zakladka schowana (Hide)
 
@@ -328,6 +329,16 @@ class ImageView(QWidget):
                         self.points_set.append(selection[0])
 
         self.update_mask()
+
+    def draw_profile_line(self):
+        # kolumna / wiersz profilu (klawisze c, l), dopoki panel profilu jest widoczny; dawniej rysowana w update()
+        # i od razu usuwana przez czyszczenie linii w update_points
+        if not self.profile_line or not self.c_window or not panel_visible(self.c_window): return
+        kind, v = self.profile_line
+        vertical = (kind == "column") != bool(self.parent.cfg_rot90)     # rot90: kolumna lezy poziomo
+        X, Y = self.to_screen(v, v)          # kolumna x=v: X=v (rot90: Y=nx-1-v); wiersz y=v: Y=v (rot90: X=v)
+        if vertical: self.axes.axvline(x=X, color="r", alpha=0.5)
+        else: self.axes.axhline(y=Y, color="r", alpha=0.5)
 
     def draw_whiskers(self, zestaw, sel, xs, ys, mksize, mkcolor, valuecol):
         # kreski eliptycznosci (marker WHISKER): quiver bez grotow, pivot w gwiezdzie. Kierunek w danych (angles="xy" -
@@ -412,14 +423,6 @@ class ImageView(QWidget):
         #   mymap.set_bad("red")
 
         self.image = self.axes.imshow(dane2,cmap=mymap,vmin=vmin, vmax=vmax,interpolation="None")
-
-        if self.hline:
-          self.axes.axhline(y=self.hline,color="r",alpha=0.5)
-          self.hline=False
-
-        if self.vline:
-          self.axes.axvline(x=self.vline,color="r",alpha=0.5)
-          self.vline=False
 
         # to jest stary mechanizm, nie wiem czy zostawic
         self.ext_x=self.parent.ext_x
@@ -769,6 +772,7 @@ class ImageView(QWidget):
             return
         if event.key == "escape":
             close_last_panel()
+            self.update_points()                     # np. linia profilu znika razem z panelem
             return
         if event.key == "?":
             self.show_keys()
@@ -904,9 +908,8 @@ class ImageView(QWidget):
           self.c_window.axes.plot(xxx,yyy)
           self.c_window.canvas.draw()
 
-          if self.parent.cfg_rot90: self.vline=x
-          else: self.hline=y
-          self.update()
+          self.profile_line=("line", yr)
+          self.update_points()
 
           txt="line y=%.2f   "%(yr)
           self.text_window.txt=txt
@@ -944,9 +947,8 @@ class ImageView(QWidget):
           self.c_window.axes.plot(xxx,yyy)
           self.c_window.canvas.draw()
 
-          if self.parent.cfg_rot90: self.hline=y
-          else: self.vline=x
-          self.update()
+          self.profile_line=("column", xr)
+          self.update_points()
 
           txt="column x=%.2f "%(xr)
           self.text_window.txt=txt

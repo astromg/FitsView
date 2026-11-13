@@ -110,6 +110,16 @@ def show_panel(win):
     dock.raise_()                                # zakladka doku na wierzch
 
 
+def show_keep_focus(win, anchor):
+    # panel z wynikiem klawisza (Query, Profile, Radial, Isophotes): fokus wraca do obrazu (kolejne klawisze),
+    # ale panel zostaje widoczny - activateWindow podnosil glowne okno NAD panel, ktory na malym ekranie na nie
+    # zachodzi, i wykres "liczyl sie, ale go nie bylo widac"
+    show_panel(win)
+    anchor.activateWindow()
+    if not docked(win):
+        win.raise_()
+
+
 def close_panel(win):
     dock = getattr(win, "_fv_dock", None)
     if dock is not None and dock.widget() is win:

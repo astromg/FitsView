@@ -19,7 +19,7 @@ from astropy.io import fits
 
 from pyaraucaria.ffs import FFS
 
-from fitsview.fv_windows import init_panel, show_panel, close_panel
+from fitsview.fv_windows import init_panel, show_panel, close_panel, show_keep_focus
 from fitsview.fv_theme import theme
 from fitsview import fv_toi
 
@@ -97,9 +97,8 @@ class TextWindow(QWidget):
 #      self.pole.setLineWrapMode(0)
       init_panel(self, self.parent, "query", "Query", 400, 300)
   def update(self):
-      show_panel(self)
       self.pole.append(self.txt)
-      self.parent.activateWindow()
+      show_keep_focus(self, self.parent)
       
   def close_window(self):     
       close_panel(self)
@@ -144,9 +143,8 @@ class PlotWindow(QWidget):
 
     def update(self):
         self.style_theme()                      # po axes.clear() w Image osie wracaja do bieli
-        show_panel(self)
         self.pole.setText(self.txt)
-        self.parent.activateWindow()
+        show_keep_focus(self, self.parent)
 
     def style_theme(self):
         theme.style_figure(self.fig, [self.axes])

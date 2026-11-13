@@ -143,6 +143,12 @@ Helper windows (Query, Profile, Radial profile, Isophotes, FFS, Header, Figure, 
 - `e` (`ImageView.draw_isophotes`): cut-out in screen orientation (rot90 as `to_screen`: X = y, Y = nx-1-x; flips via
   limits), asinh scale, isophotes 10/25/50/75/90 % of the peak above background + 3 sigma, FWHM ellipse from moments
   (`fv_star.moment_axes`), numbers as the x label (a box on the image covered the cut-out).
+- Result panels (Query, Profile, Radial, Isophotes) show through `fv_windows.show_keep_focus(win, anchor)`: focus
+  back to the image, then the panel is raised again — a plain `activateWindow()` put the main window over panels
+  that overlap it (small screen), so plots were computed but hidden.
+- `c` / `l` mark the column / row with `ImageView.profile_line` (original coordinates), drawn by
+  `draw_profile_line` inside `update_points` while the profile panel is visible. Anything drawn on `self.axes` in
+  `update()` is lost: `update_points` removes all lines and collections first.
 - `r`: Gaussian fit started from the data (peak - bkg, FWHM(FFS)/2.355, bkg), failure handled; FFS FWHM shown too.
 
 ## Local dependency: pyaraucaria
