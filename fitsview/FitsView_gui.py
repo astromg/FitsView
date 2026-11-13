@@ -42,6 +42,8 @@ warnings.simplefilter('ignore', category=AstropyWarning)
 FITS_EXT = (".fits", ".fit", ".fts", ".fits.fz", ".fit.fz", ".fz", ".fits.gz", ".fit.gz", ".fts.gz")
 
 
+MARKED = "marked"                       # tabela punktow z klawisza m
+
 def is_fits_name(name):
     return str(name).lower().endswith(FITS_EXT)
 
@@ -439,7 +441,7 @@ class FitsView(QWidget):
             self.tab.append(widget)
             self.TabWindow.addTab(widget, title)
 
-    def add_coo(self,data,name="data",color=None,plot_image=True,preset=None):
+    def add_coo(self,data,name="data",color=None,plot_image=True,preset=None,redraw=True):
         # tabela o tej samej nazwie (np. ponowne FFS) jest podmieniana, kolor markerow zostaje;
         # preset: ustawienia Catalog dla nowej tabeli, np. {"marker": "open square", "mksize": 9, "valuecol": "shape",
         # "range": (0.55, 0.95), "outside": True}
@@ -468,7 +470,42 @@ class FitsView(QWidget):
         self.put_tab(tmp["tab"], os.path.basename(str(name)), old)
         tmp["tab"].update()
 
-        self.update_tabs()
+        if redraw: self.update_tabs()
+        else: self.update_overlays()               # tylko punkty (np. m), bez przerysowania obrazow
+
+    def mark_point(self,x,y,counts):
+        # klawisz m: punkt do tabeli MARKED (zwykla tabela Catalog: markery, zapis, sortowanie);
+        # znika z klatka (newFits czysci table_data) jak inne tabele
+        i = self.find_data(self.table_data,MARKED)
+        if i is None or len(self.table_data[i]["data"]) == 0:
+            data = Table(names=["id","x","y","counts"], dtype=[int,float,float,float])
+        else: data = self.table_data[i]["data"]
+        data.add_row([int(max(data["id"], default=0)) + 1, x, y, counts])
+        self.add_coo(data, name=MARKED, preset={"marker": "open circle"}, redraw=False)
+
+    def unmark_point(self,x,y,others=()):
+        # klawisz d: usuwa najblizszy punkt z MARKED albo z others (listy [xs, ys] punktow pomiarow) -> True, gdy cos usunieto
+        best = None                                   # (odleglosc^2, lista albo None dla MARKED, indeks)
+        i = self.find_data(self.table_data,MARKED)
+        if i is not None and not self.table_data[i].get("hidden") and len(self.table_data[i]["data"]) > 0:
+            d = self.table_data[i]["data"]
+            dd = (numpy.asarray(d["x"]) - x)**2 + (numpy.asarray(d["y"]) - y)**2
+            best = (dd.min(), None, int(dd.argmin()))
+        for xs, ys in others:
+            if len(xs) == 0: continue
+            dd = (numpy.asarray(xs) - x)**2 + (numpy.asarray(ys) - y)**2
+            if best is None or dd.min() < best[0]: best = (dd.min(), (xs, ys), int(dd.argmin()))
+        if best is None: return False
+        if best[1] is not None:
+            del best[1][0][best[2]]
+            del best[1][1][best[2]]
+            self.update_overlays()
+            return True
+        tmp = self.table_data[i]
+        tmp["data"].remove_row(best[2])
+        if len(tmp["data"]) == 0: self.hide_tab(tmp["tab"]); self.update_overlays()
+        else: self.add_coo(tmp["data"], name=MARKED, redraw=False)
+        return True
 
     def add_map(self,data,name="map",description="",frame=True,cmap=None):
         # cmap: domyslna mapa kolorow zakladki (None - viridis), np. twilight dla katow

@@ -48,8 +48,8 @@ The **Show optiones** allows to adjast contrast level with sliders on the left. 
 
 When the main window is active and pointer is hovering over the image, pressing specific **key** will activate desired function. Result will be displayed in a **Querry Window**, or other specific window. Numeric result will be printed in short version to a **terminal**.
 
-*   **m** : mark point on the image
-*   **d** : delete marker on the image
+*   **m** : mark point: adds a row (id, x, y, counts) to the table tab "marked"
+*   **d** : delete the nearest marked point (or measurement marker of e, r, q...)
 *   **g** : goto - put x and y coordinates in a popup dialog window. Marker will be set on this coordinates and image will be centered on this point
 *   **f** : find - if coordinate file was loaded, the line from this file with the closest coordinates is printed.
 *   **b** : background - measure background in counts/pixel. Measuremetn is averaged from the viefinder aperture. Use before **q** and **z** functions

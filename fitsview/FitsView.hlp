@@ -37,8 +37,8 @@ Result will be displayed in a <b>Querry Window</b>, or other specific window. Nu
 
 <ul>
 
-<li><b>m</b> : mark point on the image</li>
-<li><b>d</b> : delete marker on the image</li>
+<li><b>m</b> : mark point: adds a row (id, x, y, counts) to the table tab "marked"</li>
+<li><b>d</b> : delete the nearest marked point (or measurement marker of e, r, q...)</li>
 <li><b>g</b> : goto - put x and y coordinates in a popup dialog window. Marker will be set on this coordinates and image will be centered on this point </li>
 <li><b>f</b> : find - if coordinate file was loaded, the line from this file with the closest coordinates is printed. </li>
 <li><b>b</b> : background - measure background in counts/pixel. Measuremetn is averaged from the viefinder aperture. Use before <b>q</b> and <b>z</b> functions  </li>

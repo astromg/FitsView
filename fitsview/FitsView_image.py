@@ -45,7 +45,7 @@ WHISKER_PT = 0.3
 KEYS_HELP = [
     ("\u2190 \u2192", "previous / next file (zoom kept)"), ("Home End", "first / last file"),
     ("wheel", "zoom (image and thumbnail)"), ("click", "centre here (image and thumbnail)"),
-    ("m", "mark point"), ("d", "delete marker"), ("g", "go to x, y"), ("f", "find nearest in table"),
+    ("m", "mark point (table marked)"), ("d", "delete marker"), ("g", "go to x, y"), ("f", "find nearest in table"),
     ("b", "background"), ("z", "zero-point"), ("q", "query (counts, mag)"), ("c", "column profile"),
     ("l", "line profile"), ("e", "star shape: isophotes, FWHM, e, theta"), ("r", "radial profile, FWHM"), ("s", "FFS window"),
     ("Esc", "close last panel"), ("?", "this list"),
@@ -227,6 +227,20 @@ class ImageView(QWidget):
             self.axes.add_collection(LineCollection([segments[n]],colors="r",linewidths=4,alpha=0.5),autolim=False)
 
 
+    def draw_int_points(self):
+        # punkty zewnetrzne (ext_x, ext_y) i pomiarow (int_x, int_y: e, r, q, b, z...) - w update_points,
+        # bo rysowane w update() znikaly (update_points usuwa wszystkie linie)
+        if not self.showM_c.isChecked(): return
+        mksize=int(self.mksize_s.value()/10.)+1
+        for xs, ys, style, alpha, size in [(self.parent.ext_x, self.parent.ext_y, self.parent.cfg_extMarker, 1., mksize),
+                                           (self.int_x, self.int_y, self.parent.cfg_intMarker, 0.5, mksize+2)]:
+            if len(xs) == 0: continue
+            try:
+                self.axes.plot(*self.to_screen(xs, ys), str(style).strip(), markersize=size, alpha=alpha, mfc='none')
+            except ValueError:
+                self.parent.errmssg("'" + str(style).strip() + "' is not a proper marker style\nCheck configuration!")
+                return
+
     def update_points(self):
         if self.dirty: return                      # i tak przerysuje sie cala przy pokazaniu zakladki
         if not self.isVisible():
@@ -254,6 +268,7 @@ class ImageView(QWidget):
             if im is not self.image: im.remove()
 
         self.draw_profile_line()
+        self.draw_int_points()
 
         for zestaw in self.parent.table_data:
             if zestaw.get("hidden"): continue           # zakladka schowana (Hide)
@@ -428,30 +443,6 @@ class ImageView(QWidget):
         self.ext_x=self.parent.ext_x
         self.ext_y=self.parent.ext_y
 
-
-        if self.showM_c.isChecked():
-          mksize=int(self.mksize_s.value()/10.)+1
-          if len(self.ext_x)>0:
-             try:
-                if self.parent.cfg_rot90:
-                   self.axes.plot(*self.to_screen(self.ext_x,self.ext_y),str(self.parent.cfg_extMarker).strip(),markersize=mksize,mfc='none')
-                else: self.axes.plot(self.ext_x,self.ext_y,str(self.parent.cfg_extMarker).strip(),markersize=mksize,mfc='none')
-             except ValueError:
-                self.msg = QMessageBox()
-                self.msg.setText("'"+self.parent.cfg_extMarker.strip()+"'"+ " is not a proper marker style\nCheck configuration!")
-                self.msg.exec()
-
-
-          mksize=mksize+2
-          if len(self.int_x)>0:
-             try:
-                if self.parent.cfg_rot90:
-                   self.axes.plot(*self.to_screen(self.int_x,self.int_y),str(self.parent.cfg_intMarker).strip(),markersize=mksize,alpha=0.5,mfc='none')
-                else: self.axes.plot(self.int_x,self.int_y,str(self.parent.cfg_intMarker).strip(),markersize=mksize,alpha=0.5,mfc='none')
-             except ValueError:
-                self.msg = QMessageBox()
-                self.msg.setText("'"+self.parent.cfg_intMarker.strip()+"'"+ " is not a proper marker style\nCheck configuration!")
-                self.msg.exec()
 
         mymap = self.get_cmap()
 
@@ -790,10 +781,8 @@ class ImageView(QWidget):
 
 
         if "m" in event.key:
-            self.int_x.append(xr)
-            self.int_y.append(yr)
-            self.update()
             counts=self.pixel_value(x,y)
+            self.parent.mark_point(xr,yr,counts)          # tabela "marked" (Catalog), rysowana jak inne tabele
             txt=str(xr)+" "+str(yr)+" "+str(counts)+" m"
             txt2 = "marked x=%.2f y=%.2f counts=%d"%(xr,yr,counts)
             self.text_window.txt=txt2
@@ -802,14 +791,8 @@ class ImageView(QWidget):
 
 
         if "d" in event.key and not self.parent.special:
-          if len(self.int_x)>0:
-             diffx = numpy.array(self.int_x)-float(xr)
-             diffy = numpy.array(self.int_y)-float(yr)
-             diff=diffx**2+diffy**2
-             n=numpy.argmin(diff)
-             del self.int_x[n]
-             del self.int_y[n]
-             self.update()
+          # najblizszy punkt: z tabeli "marked" albo znacznik pomiaru (e, r, q...)
+          self.parent.unmark_point(xr,yr,[(self.int_x,self.int_y)])
 
         if "f" in event.key:
             # diffx = numpy.array(self.ext_x)-float(xr)

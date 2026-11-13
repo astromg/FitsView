@@ -149,6 +149,10 @@ Helper windows (Query, Profile, Radial profile, Isophotes, FFS, Header, Figure, 
 - `c` / `l` mark the column / row with `ImageView.profile_line` (original coordinates), drawn by
   `draw_profile_line` inside `update_points` while the profile panel is visible. Anything drawn on `self.axes` in
   `update()` is lost: `update_points` removes all lines and collections first.
+- `m` adds a row (id, x, y, counts) to the catalog table `marked` (`FitsView.mark_point`, `add_coo(..., redraw=False)`:
+  overlays only); `d` deletes the nearest point of `marked` or of the measurement markers `int_x`/`int_y`
+  (`unmark_point`); an empty `marked` is hidden. `int_x`/`int_y` and `ext_x`/`ext_y` are drawn by
+  `draw_int_points` inside `update_points` (drawn in `update()` they vanished, as the `c`/`l` line did).
 - `r`: Gaussian fit started from the data (peak - bkg, FWHM(FFS)/2.355, bkg), failure handled; FFS FWHM shown too.
 
 ## Local dependency: pyaraucaria
