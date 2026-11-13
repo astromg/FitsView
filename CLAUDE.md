@@ -134,6 +134,17 @@ Helper windows (Query, Profile, Radial profile, Isophotes, FFS, Header, Figure, 
 - `newFits` drops everything of the previous frame: `table_data` (coo, FFS tables), `map_data`, `mask_data`, the
   view (unless `keep_view`), and closes the old FFS window (its "Show" would add old products to the new frame).
 
+## Keys e and r: star measurement as FFS (2026-11-13)
+
+- `fitsview/fv_star.py`: `measure_star(dane, x, y, search, box=10, saturation)` = the recipe of `FFS.star_info` for one
+  star (brightest pixel within `search`, cut-out +-box, background = median of the border, FFS.fwhm / adaptive_moments
+  (pca fallback) / cpe / concentration_index) — only FFS static methods, no pyaraucaria changes; keep in sync with
+  `star_info` by hand. Verified: same FWHM, e, theta, CPE, CI as the FFS stars table.
+- `e` (`ImageView.draw_isophotes`): cut-out in screen orientation (rot90 as `to_screen`: X = y, Y = nx-1-x; flips via
+  limits), asinh scale, isophotes 10/25/50/75/90 % of the peak above background + 3 sigma, FWHM ellipse from moments
+  (`fv_star.moment_axes`), numbers as the x label (a box on the image covered the cut-out).
+- `r`: Gaussian fit started from the data (peak - bkg, FWHM(FFS)/2.355, bkg), failure handled; FFS FWHM shown too.
+
 ## Local dependency: pyaraucaria
 
 `pyaraucaria` is declared in `pyproject.toml` as a git dependency on its `master`

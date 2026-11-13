@@ -57,8 +57,8 @@ When the main window is active and pointer is hovering over the image, pressing 
 *   **q** : querry - get total counts in the vievfinder aperture. If background measuremtn was performed before, background will be subtracted. If zero-point was set-up, magnitude will be calculated with respect to the zero-point.
 *   **c** : column - ADU counts profile in a specific column is plotted. If used with zoomed image, only visible part of the column is plotted.
 *   **l** : line - ADU counts profile in a specific line is plotted. If used with zoomed image, only visible part of the line is plotted.
-*   **e** : elipse - izophots of part of the image are plotted.
-*   **r** : radial profile of ADU counts is plotted. The centroid is calculated and Gauss function is fitted with the resulting FWHM.
+*   **e** : star shape - the star nearest to the cursor (brightest pixel within the aperture), cut-out in the orientation of the image (asinh scale) with isophotes at 10, 25, 50 (thick), 75, 90 % of the peak above background and 3 sigma of the background (dashed), the FWHM ellipse from adaptive moments and its axis. Measured as FFS (star_info): centroid, peak, background, FWHM, ellipticity, theta, CPE, shape, CI; SATURATED when the peak reaches the saturation level.
+*   **r** : radial profile around the star centre (as **e**) with a Gaussian fit (started from the data); FWHM from the fit and as FFS measures it, both marked as HWHM lines.
 *   **x** : xternal - magic option for external functions.
 *   **← →** : previous / next FITS file in the directory (or of `fv *.fits`, or of files dropped on the window); zoom and centre are kept for frames of the same size. **Home / End** : first / last file. The window title shows the position, e.g. `(2/120)`.
 *   **Esc** : close the last shown panel (Esc inside a panel closes it). **?** : short list of keys.

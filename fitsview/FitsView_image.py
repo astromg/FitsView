@@ -21,7 +21,7 @@ from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as Navigation
 from scipy.optimize import curve_fit
 
 
-from fitsview import FitsView_widgets
+from fitsview import FitsView_widgets, fv_star
 from fitsview.fv_theme import theme
 from fitsview.fv_windows import show_panel, close_last_panel
 
@@ -47,7 +47,7 @@ KEYS_HELP = [
     ("wheel", "zoom (image and thumbnail)"), ("click", "centre here (image and thumbnail)"),
     ("m", "mark point"), ("d", "delete marker"), ("g", "go to x, y"), ("f", "find nearest in table"),
     ("b", "background"), ("z", "zero-point"), ("q", "query (counts, mag)"), ("c", "column profile"),
-    ("l", "line profile"), ("e", "isophotes"), ("r", "radial profile, FWHM"), ("s", "FFS window"),
+    ("l", "line profile"), ("e", "star shape: isophotes, FWHM, e, theta"), ("r", "radial profile, FWHM"), ("s", "FFS window"),
     ("Esc", "close last panel"), ("?", "this list"),
 ]
 
@@ -1302,113 +1302,140 @@ class Image(ImageView):
                 print(txt2)
 
         if "e" in key:
-
+          # ksztalt gwiazdy: wycinek z izofotami w ulamkach piku, elipsa FWHM z momentow, pomiar jak FFS.star_info
           if not self.e_window:
              self.e_window=FitsView_widgets.PlotWindow(self,"isophotes","Isophotes")
              self.parent.active_windows.append(self.e_window)
-
-          show_panel(self.e_window)
-
-
-          r=int((2*int(self.parent.cfg_apersize)+15)/2.)
-
-          dane,x1,y1 = self.get_local_stamp(xr,yr,r)
-
-          XX,YY = numpy.meshgrid(numpy.arange(dane.shape[1]),numpy.arange(dane.shape[0]))
-          tmp = numpy.vstack((dane.ravel(),XX.ravel(),YY.ravel()))
-          c,xx,yy=tmp[0],tmp[1],tmp[2]
-          c=c-float(self.parent.cfg_bcg)
-
-
-
-
-          self.e_window.axes.clear()
-          self.e_window.axes.contour(dane)
-
-          self.e_window.canvas.draw()
-
-          txt="centered x=%.2f y=%.2f   "%(xr,yr)
-          self.int_x.append(xr)
-          self.int_y.append(yr)
+          s = fv_star.measure_star(self.dane, xr, yr, search=int(self.parent.cfg_apersize),
+                                   saturation=self.parent.cfg_saturation)
+          if s is None: return
+          self.draw_isophotes(s)
+          t = s["theta"]
+          txt = ("x=%.2f y=%.2f peak=%.0f bkg=%.1f FWHM=%.2f e=%.3f theta=%.1f CPE=%.2f shape=%.2f CI=%.2f%s"
+                 % (s["x"], s["y"], s["peak"], s["bkg"], s["fwhm"], s["ellipticity"], numpy.degrees(t),
+                    s["cpe"], s["shape"], s["ci"], "  SATURATED" if s["saturated"] else ""))
+          self.int_x.append(s["x"])
+          self.int_y.append(s["y"])
           self.update()
           self.text_window.txt=txt
           self.text_window.update()
-
           self.e_window.txt=txt
           self.e_window.update()
-          show_panel(self.e_window)
-
           print(txt)
 
         if "r" in key:
-
+          # profil radialny wokol srodka gwiazdy (centroid jak w "e") + Gauss; dla porownania FWHM jak FFS
           if not self.r_window:
              self.r_window=FitsView_widgets.PlotWindow(self,"radial","Radial profile")
              self.parent.active_windows.append(self.r_window)
-
-          show_panel(self.r_window)
-
           r=int(self.parent.cfg_apersize)
+          s = fv_star.measure_star(self.dane, xr, yr, search=r, saturation=self.parent.cfg_saturation)
+          if s is None: return
+          ny, nx = self.dane.shape
+          px, py = s["x_peak"], s["y_peak"]
+          x0, x1 = max(0, px - r - 1), min(nx, px + r + 2)
+          y0, y1 = max(0, py - r - 1), min(ny, py + r + 2)
+          YY, XX = numpy.mgrid[y0:y1, x0:x1]
+          c = numpy.asarray(self.dane[y0:y1, x0:x1], dtype=float).ravel()
+          d = numpy.hypot(XX.ravel() - s["x"], YY.ravel() - s["y"])
+          mk = (d < r) & numpy.isfinite(c)
+          c, d = c[mk], d[mk]
 
-          dane,x1,y1 = self.get_local_stamp(xr,yr,r)
+          # start z danych (pik nad tlem, sigma z FWHM FFS), a nie [1, 2, 0] - na prawdziwych klatkach fit
+          # potrafil sie nie zbiec i wyjatek przerywal klawisz
+          bkg = s["bkg"] if numpy.isfinite(s["bkg"]) else numpy.median(c)
+          sig0 = s["fwhm"] / 2.355 if numpy.isfinite(s["fwhm"]) and s["fwhm"] > 0 else 2.
+          try:
+             popt,pcov = curve_fit(self.gaus,d,c,p0=[s["peak"]-bkg, sig0, bkg], maxfev=5000)
+          except (RuntimeError, ValueError, TypeError):
+             popt = None
 
-          xy = numpy.unravel_index(dane.argmax(), dane.shape)
-          dx=x1-xy[1]
-          dy=y1-xy[0]
-          xr=int(xr)-dx
-          yr=int(yr)-dy
-
-          dane,x1,y1 = self.get_local_stamp(xr,yr,r)
-
-          XX,YY = numpy.meshgrid(numpy.arange(dane.shape[1]),numpy.arange(dane.shape[0]))
-          tmp = numpy.vstack((dane.ravel(),XX.ravel(),YY.ravel()))
-          c,xx,yy=tmp[0],tmp[1],tmp[2]
-
-          if numpy.min(c)<0 : waga = (c + numpy.min(c) )**2
-          else: waga = (c - numpy.min(c) )**2
-
-          x0=numpy.sum(waga*xx)/( numpy.sum(waga) )
-          y0=numpy.sum(waga*yy)/( numpy.sum(waga) )
-          dx=float(x1)-x0
-          dy=float(y1)-y0
-          xr=float(xr-dx)
-          yr=float(yr-dy)
-
-
-          d=((xx-x0)**2+(yy-y0)**2)**0.5
-          print(numpy.min(d))
-          mk=d<r
-          c = c[mk]
-          d = d[mk]
-
-          popt,pcov = curve_fit(self.gaus,d,c,p0=[1,2,0])
-
-          xx=numpy.arange(0,d.max(),0.01)
-          yy=self.gaus(xx,popt[0],popt[1],popt[2])
-          amplitude = popt[0]
-          sky = popt[2]
-          sigma=(popt[1]**2)**0.5
-          fwhm=2.355*sigma
-
-          self.r_window.axes.clear()
-          self.r_window.axes.plot(d,c,".g")
-
-          self.r_window.axes.plot(xx,yy)
+          ax = self.r_window.axes
+          ax.clear()
+          ax.plot(d,c,".g",ms=3)
+          if popt is not None:
+             amplitude, sky = popt[0], popt[2]
+             fwhm = 2.355*abs(popt[1])
+             xx = numpy.linspace(0, d.max(), 300)
+             ax.plot(xx, self.gaus(xx, *popt))
+             ax.axvline(fwhm/2., color="C0", ls="--", lw=0.8, label="HWHM Gauss %.2f" % (fwhm/2.))
+          else:
+             amplitude, sky, fwhm = numpy.nan, bkg, numpy.nan
+          if numpy.isfinite(s["fwhm"]):
+             ax.axvline(s["fwhm"]/2., color="C1", ls=":", lw=1, label="HWHM FFS %.2f" % (s["fwhm"]/2.))
+          ax.set_xlabel("r [px]")
+          ax.set_ylabel("ADU")
+          if ax.get_legend_handles_labels()[0]: ax.legend(fontsize=7)
           self.r_window.canvas.draw()
+
+          xr, yr = s["x"], s["y"]
+          fit = "FWHM=%.2f" % fwhm if popt is not None else "Gauss fit failed"
           txt2="%.2f %.2f  %.2f r  "%(xr,yr,fwhm)
-          txt="centered x=%.2f y=%.2f amp=%.1f sky=%.1f FWHM=%.2f   "%(xr,yr,amplitude, sky,fwhm)
+          txt="centered x=%.2f y=%.2f amp=%.1f sky=%.1f %s FWHM(FFS)=%.2f%s   "%(
+              xr,yr,amplitude,sky,fit,s["fwhm"],"  SATURATED" if s["saturated"] else "")
           self.int_x.append(xr)
           self.int_y.append(yr)
           self.update()
           self.text_window.txt=txt
           self.text_window.update()
-
           self.r_window.txt=txt
           self.r_window.update()
-          show_panel(self.r_window)
-
-
           print(txt2)
+
+    def draw_isophotes(self, s):
+       # panel "e": wycinek wokol gwiazdy w orientacji glownego obrazu (rot90, flip), osie w pikselach klatki;
+       # obraz w skali asinh (jadro i skrzydla), izofoty 10/25/50/75/90 % piku nad tlem (50 % grubo -
+       # "izofota FWHM") i 3 sigma tla (przerywana, gdy nizej niz 10 %), elipsa FWHM z momentow i jej os.
+       ax = self.e_window.axes
+       ax.clear()
+       ny, nx = self.dane.shape
+       f = s["fwhm"] if numpy.isfinite(s["fwhm"]) else 4.
+       h = int(min(60, max(1.5 * fv_star.BOX, 4 * f)))
+       px, py = s["x_peak"], s["y_peak"]
+       x0, x1 = max(0, px - h), min(nx, px + h + 1)
+       y0, y1 = max(0, py - h), min(ny, py + h + 1)
+       S = numpy.asarray(self.dane[y0:y1, x0:x1], dtype=float)
+       if self.parent.cfg_rot90:                 # jak to_screen: X = y, Y = nx - 1 - x
+          A, X0, Y0 = numpy.rot90(S), y0, nx - x1
+       else:
+          A, X0, Y0 = S, x0, y0
+       ext = (X0 - 0.5, X0 + A.shape[1] - 0.5, Y0 - 0.5, Y0 + A.shape[0] - 0.5)
+       bkg, sig = s["bkg"], s["sigma"]
+       amp = s["peak"] - bkg
+       scale = 3 * sig if numpy.isfinite(sig) and sig > 0 else max(abs(amp) / 100., 1.)
+       ax.imshow(numpy.arcsinh((A - bkg) / scale), origin="lower", extent=ext, cmap="gray", interpolation="nearest")
+
+       Xc, Yc = X0 + numpy.arange(A.shape[1]), Y0 + numpy.arange(A.shape[0])
+       if amp > 0:
+          fr = [0.1, 0.25, 0.5, 0.75, 0.9]
+          ax.contour(Xc, Yc, A, levels=[bkg + amp * q for q in fr], colors=[VALUE_CMAP(i / 4.) for i in range(5)],
+                     linewidths=[0.8, 0.8, 2.0, 0.8, 0.8])
+          if numpy.isfinite(sig) and 3 * sig < 0.1 * amp:
+             ax.contour(Xc, Yc, A, levels=[bkg + 3 * sig], colors=["#1e90ff"], linewidths=0.8, linestyles="--")
+
+       X, Y = self.to_screen(s["x"], s["y"])
+       ax.plot([X], [Y], "+", color="w", ms=8)
+       a, b = fv_star.moment_axes(s["fwhm_moments"], s["ellipticity"])
+       if numpy.isfinite(a) and numpy.isfinite(s["theta"]):
+          X1, Y1 = self.to_screen(s["x"] + numpy.cos(s["theta"]), s["y"] + numpy.sin(s["theta"]))
+          ang = numpy.degrees(numpy.arctan2(Y1 - Y, X1 - X))
+          ax.add_patch(patches.Ellipse((X, Y), 2 * a, 2 * b, angle=ang, fill=False, color="w", ls="--", lw=1))
+          ux, uy = numpy.cos(numpy.radians(ang)), numpy.sin(numpy.radians(ang))
+          ax.plot([X - 1.6 * a * ux, X + 1.6 * a * ux], [Y - 1.6 * a * uy, Y + 1.6 * a * uy], color="w", lw=0.8)
+
+       ax.set_xlim(ext[1], ext[0]) if self.parent.cfg_flipX else ax.set_xlim(ext[0], ext[1])
+       ax.set_ylim(ext[3], ext[2]) if self.parent.cfg_flipY else ax.set_ylim(ext[2], ext[3])
+       ax.set_aspect("equal")
+       # liczby pod obrazem (w ramce na obrazie zaslanialy wycinek); tight_layout zostawia na nie miejsce
+       lines = ["x %.2f  y %.2f   peak %.0f%s   bkg %.1f\u00b1%.1f" % (s["x"], s["y"], s["peak"],
+                " SATURATED" if s["saturated"] else "", bkg, sig),
+                "FWHM %.2f (x %.2f y %.2f)  mom %.2f" % (s["fwhm"], s["fwhm_x"], s["fwhm_y"], s["fwhm_moments"]),
+                "e %.3f  theta %.1f\u00b0  CPE %.2f  shape %.2f  CI %.2f" % (
+                    s["ellipticity"], numpy.degrees(s["theta"]), s["cpe"], s["shape"], s["ci"]),
+                "isoph. 10 25 50 75 90 % peak, -- 3\u03c3, ellipse FWHM"]
+       ax.set_xlabel("\n".join(lines), fontsize=7, family="monospace", color=theme.hex("text"))
+       ax.tick_params(labelsize=7)
+       self.e_window.canvas.draw()
 
     def gaus(self,x,a,sigma,c0):
        x0=0
