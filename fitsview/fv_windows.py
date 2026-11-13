@@ -5,6 +5,12 @@
 # byly liczone z cfg_geometry (z bledem: gm[1] zamiast gm[0]) i na laptopie okna wychodzily poza ekran.
 
 from fitsview.PyQtX.QtWidgets import QApplication
+from fitsview.PyQtX.QtCore import Qt
+from fitsview.PyQtX.QtGui import QKeySequence
+try:
+    from fitsview.PyQtX.QtGui import QShortcut          # PyQt6
+except ImportError:
+    from fitsview.PyQtX.QtWidgets import QShortcut      # PyQt5
 
 
 def available_geometry(widget=None):
@@ -76,13 +82,22 @@ def init_panel(win, anchor, kind, title, width, height, dy=0):
         host.fv_dock(win, kind, title)
     else:
         place_window(win, anchor, width, height, dy)
+    # Esc w panelu zamyka go (z obrazu: Esc zamyka ostatnio pokazany panel, close_last_panel)
+    win._fv_esc = QShortcut(QKeySequence("Esc"), win)
+    win._fv_esc.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+    win._fv_esc.activated.connect(lambda: close_panel(win))
 
 
 def docked(win):
     return getattr(win, "_fv_dock", None) is not None
 
 
+_shown = []        # panele w kolejnosci pokazywania (ostatni - ostatnio pokazany), dla close_last_panel
+
+
 def show_panel(win):
+    if win in _shown: _shown.remove(win)
+    _shown.append(win)
     dock = getattr(win, "_fv_dock", None)
     if dock is None:
         win.show()
@@ -101,3 +116,23 @@ def close_panel(win):
         dock.hide()
     elif dock is None:
         win.close()
+
+
+def panel_visible(win):
+    dock = getattr(win, "_fv_dock", None)
+    if dock is not None: return dock.isVisible() and dock.widget() is win
+    return win.isVisible()
+
+
+def close_last_panel():
+    # Esc nad obrazem: zamyka ostatnio pokazany, wciaz widoczny panel; True, jesli jakis zamknieto
+    for win in reversed(list(_shown)):
+        try:
+            visible = panel_visible(win)
+        except RuntimeError:                     # obiekt Qt juz usuniety
+            _shown.remove(win)
+            continue
+        if visible:
+            close_panel(win)
+            return True
+    return False

@@ -113,6 +113,18 @@ Helper windows (Query, Profile, Radial profile, Isophotes, FFS, Header, Figure, 
 - FFS product type `field`, `psf field` (tab `ffs.psf field`): the `psf_ellipticity` map with the `psf grid` table's
   lines over it (catalog tables draw on all image tabs — no own drawing). Lines without heads: ellipticity is an axis.
 
+## Browsing and keys (2026-11-13)
+
+- `FitsView.fits_list()` = full paths: `browse_files` (`fv *.fits`, files dropped on the window) or the FITS
+  (`is_fits_name`, `FITS_EXT`) in `fits_directory` = the directory of the current file (set in `newFits`), without
+  `*_ffs.fits` (Save MEF). `browse(step | to)` (← → Home End, buttons) calls `newFits(keep_view=True)`: zoom and centre
+  stay when the new frame has the same shape. Window title = `title()` (file + position `(i/n)`).
+- Navigation keys are handled first in `ImageView.keypressed`: "right", "home", "end", "escape" contain letters of
+  other functions, which are tested with `"x" in event.key`.
+- Esc: `fv_windows.close_last_panel()` (order kept by `show_panel`); `init_panel` adds an Esc shortcut to each panel.
+  `?` shows `KEYS_HELP` as a tooltip. Mouse wheel zooms on the thumbnail too (`mouse_scroll`, same coordinates).
+- Exceptions in Qt event handlers (e.g. `dropEvent`) abort the program in PyQt6 — catch them and show `errmssg`.
+
 ## Local dependency: pyaraucaria
 
 `pyaraucaria` is declared in `pyproject.toml` as a git dependency on its `master`

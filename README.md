@@ -29,6 +29,7 @@ Unpushed pyaraucaria changes: run from source, `PYTHONPATH=.:../pyaraucaria pyth
 
 ```./FitsView.py plik.fits 400 500```  #  mark point  
 ```./FitsView.py plik.fits plik.out```  #  mark all point from plik.out  
+```fv *.fits```  #  open the first, browse the given files with ← →  
 
 
 ### Basic functions and layout of the program.
@@ -54,6 +55,9 @@ When the main window is active and pointer is hovering over the image, pressing 
 *   **e** : elipse - izophots of part of the image are plotted.
 *   **r** : radial profile of ADU counts is plotted. The centroid is calculated and Gauss function is fitted with the resulting FWHM.
 *   **x** : xternal - magic option for external functions.
+*   **← →** : previous / next FITS file in the directory (or of `fv *.fits`, or of files dropped on the window); zoom and centre are kept for frames of the same size. **Home / End** : first / last file. The window title shows the position, e.g. `(2/120)`.
+*   **Esc** : close the last shown panel (Esc inside a panel closes it). **?** : short list of keys.
+*   **mouse wheel** : zoom, over the image or the thumbnail. FITS and coordinate files can be dragged onto the window.
 
 #### Configuration
 

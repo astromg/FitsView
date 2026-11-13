@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # PyQtX przed matplotlib: backend_qtagg bierze juz zaimportowane PyQt6
-from fitsview.PyQtX.QtWidgets import QMainWindow, QApplication, QWidget, QLabel,QCheckBox, QTextEdit, QMessageBox, QLineEdit, QDialog, QTabWidget, QPushButton, QFileDialog, QGridLayout, QHBoxLayout, QVBoxLayout, QInputDialog,QComboBox, QSlider
+from fitsview.PyQtX.QtWidgets import QMainWindow, QApplication, QWidget, QLabel,QCheckBox, QTextEdit, QMessageBox, QLineEdit, QDialog, QTabWidget, QPushButton, QFileDialog, QGridLayout, QHBoxLayout, QVBoxLayout, QInputDialog,QComboBox, QSlider, QToolTip
 from fitsview.PyQtX import QtCore, QtGui
 from fitsview.PyQtX.QtCore import Qt
 
@@ -23,7 +23,7 @@ from scipy.optimize import curve_fit
 
 from fitsview import FitsView_widgets
 from fitsview.fv_theme import theme
-from fitsview.fv_windows import show_panel
+from fitsview.fv_windows import show_panel, close_last_panel
 
 
 # kolorowanie markerow wg kolumny "color" (Catalog): dwa kolory, niebieski - najmniejsza wartosc, czerwony - najwieksza
@@ -39,6 +39,17 @@ VALUE_CMAP = LinearSegmentedColormap.from_list("fv_values", ["#1e90ff", "#ff2a2a
 WHISKER = "whisker (ellipticity, theta)"
 WHISKER_FRAC = 0.2
 WHISKER_PT = 0.3
+
+
+# sciaga klawiszy (klawisz "?" nad obrazem); pelny opis w HELP (FitsView.hlp)
+KEYS_HELP = [
+    ("\u2190 \u2192", "previous / next file (zoom kept)"), ("Home End", "first / last file"),
+    ("wheel", "zoom (image and thumbnail)"), ("click", "centre here (image and thumbnail)"),
+    ("m", "mark point"), ("d", "delete marker"), ("g", "go to x, y"), ("f", "find nearest in table"),
+    ("b", "background"), ("z", "zero-point"), ("q", "query (counts, mag)"), ("c", "column profile"),
+    ("l", "line profile"), ("e", "isophotes"), ("r", "radial profile, FWHM"), ("s", "FFS window"),
+    ("Esc", "close last panel"), ("?", "this list"),
+]
 
 
 def sample(dane, n=1000000):
@@ -569,9 +580,15 @@ class ImageView(QWidget):
        self.zmiana_zoom()
 
 
+    def show_keys(self):
+       # sciaga klawiszy jako podpowiedz przy kursorze (znika po ruchu poza obraz albo klawiszu)
+       rows = "".join("<tr><td><b>%s</b>&nbsp;&nbsp;</td><td>%s</td></tr>" % k for k in KEYS_HELP)
+       QToolTip.showText(QtGui.QCursor.pos(), "<table>%s</table>" % rows, self.canvas, self.canvas.rect(), 20000)
+
     def mouse_scroll(self,event):
-       # kolko myszy: zoom x1.25 na krok wokol punktu pod kursorem (zostaje w tym samym miejscu ekranu)
-       if event.inaxes is not self.axes or event.xdata is None: return
+       # kolko myszy: zoom x1.25 na krok wokol punktu pod kursorem (zostaje w tym samym miejscu ekranu);
+       # na miniaturce tak samo (te same wspolrzedne): punkt pod kursorem przyciaga widok przy przyblizaniu
+       if event.inaxes not in (self.axes, self.axes_small) or event.xdata is None: return
        n = len(self.dane[0])
        z = max((n - self.zoom_s.value() + 1) / 2., 1.)           # polowa widocznego zakresu, jak w zmiana_zoom
        f = 1.25 ** (-event.step)                                  # step > 0: kolko od siebie - przyblizenie
@@ -742,6 +759,18 @@ class ImageView(QWidget):
 
 
     def keypressed(self,event):
+        # klawisze nawigacji - przed reszta: "right", "home", "end", "escape" zawieraja litery innych funkcji
+        # (r, g, m, e, d, s, c), ktore sprawdzane sa przez "x in event.key"
+        nav = {"right": (1, None), "left": (-1, None), "home": (0, 0), "end": (0, -1)}
+        if event.key in nav:                        # przegladanie plikow, na kazdej zakladce (tez mapy)
+            self.parent.browse(*nav[event.key])
+            return
+        if event.key == "escape":
+            close_last_panel()
+            return
+        if event.key == "?":
+            self.show_keys()
+            return
         if not self.text_window:
           self.text_window=FitsView_widgets.TextWindow(self)
           self.parent.active_windows.append(self.text_window)
@@ -1034,6 +1063,7 @@ class ImageView(QWidget):
        self.canvas_small = FigureCanvas(self.fig3)
        self.axes_small = self.fig3.add_axes([0, 0, 1, 1])
        self.cid_click_small=self.canvas_small.mpl_connect('button_press_event', self.image_clicked)
+       self.cid_scroll_small=self.canvas_small.mpl_connect('scroll_event', self.mouse_scroll)
 
 
 

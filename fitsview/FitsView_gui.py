@@ -38,6 +38,14 @@ warnings.simplefilter('ignore', category=AstropyWarning)
 
 #print(matplotlib.__version__)
 
+# rozszerzenia plikow FITS (przegladanie, linia polecen, przeciaganie); astropy czyta tez skompresowane
+FITS_EXT = (".fits", ".fit", ".fts", ".fits.fz", ".fit.fz", ".fz", ".fits.gz", ".fit.gz", ".fts.gz")
+
+
+def is_fits_name(name):
+    return str(name).lower().endswith(FITS_EXT)
+
+
 class FitsView(QWidget):
     def __init__(self,args,parent=None):
         # parent: FitsViewWindow (samodzielnie, z dokami) albo None (wlasne okno, np. osadzony w innym programie)
@@ -66,6 +74,7 @@ class FitsView(QWidget):
             self.raise_()
         self.com=Communicate()
         theme.on_change(self.apply_theme)
+        self.setAcceptDrops(True)                # przeciagniete pliki FITS i coo (dropEvent)
 
         #self.update()
        
@@ -86,6 +95,7 @@ class FitsView(QWidget):
         self.mask_data = []      # maski (np. z FFS), zakladki MaskTab, rysowane na Image
 
         self.browse_step = 1     # kierunek przegladania strzalkami (prefetch)
+        self.browse_files = None # pliki do przegladania z linii polecen / przeciagniete (fv *.fits); None - katalog
         self.prefetch_gen = 0
 
         self.color_cycle = cycle([
@@ -98,7 +108,76 @@ class FitsView(QWidget):
         ])
 
     def fits_list(self):
-        return sorted([f for f in os.listdir(self.fits_directory) if ".fits" in f])
+        # pliki do przegladania (strzalki, Home/End, prefetch), pelne sciezki: podane w linii polecen lub
+        # przeciagniete (browse_files) albo wszystkie FITS z katalogu biezacego pliku, bez wynikow FFS
+        # (*_ffs.fits z "Save MEF")
+        if self.browse_files: return self.browse_files
+        d = self.fits_directory
+        try: names = os.listdir(d)
+        except OSError: return []
+        return sorted(os.path.join(d, f) for f in names if is_fits_name(f) and not f.endswith("_ffs.fits"))
+
+    def browse_index(self):
+        # (pozycja biezacego pliku w fits_list albo None, lista)
+        lista = self.fits_list()
+        try: return lista.index(os.path.abspath(str(self.fname))), lista
+        except ValueError: return None, lista
+
+    def browse(self, step=0, to=None):
+        # step -1 / +1: sasiedni plik; to 0 / -1: pierwszy / ostatni. Zoom i srodek widoku zostaja.
+        i, lista = self.browse_index()
+        if i is None: return
+        j = to % len(lista) if to is not None else i + step
+        if not 0 <= j < len(lista) or j == i: return
+        self.browse_step = 1 if j > i else -1
+        self.fname = lista[j]
+        self.newFits(keep_view=True)
+
+    def title(self):
+        # tytul okna: plik i pozycja w przegladanej liscie, np. "/data/f2.fits  (2/120)"
+        i, lista = self.browse_index()
+        pos = "  (%d/%d)" % (i + 1, len(lista)) if i is not None and len(lista) > 1 else ""
+        return str(self.fname) + pos
+
+    def image_shape(self):
+        # rozmiar obrazu biezacej klatki (pierwsza zakladka z obrazem) albo None
+        for t in getattr(self, "tab", []):
+            if isinstance(t, FitsView_image.ImageView): return t.dane.shape
+        return None
+
+    def restore_view(self, view):
+        # widok (x, y, zoom) poprzedniej klatki: widoczna zakladka od razu, pozostale przy pokazaniu (showEvent)
+        self.view = view
+        for t in self.tab:
+            if isinstance(t, FitsView_image.ImageView) and t.isVisible():
+                t.x, t.y, zoom = view
+                t.zoom_s.blockSignals(True)
+                t.zoom_s.setValue(zoom)
+                t.zoom_s.blockSignals(False)
+                t.zmiana_zoom()
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls(): event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        # przeciagniete pliki: FITS - pierwszy otwierany, kilka - przegladane strzalkami jak fv *.fits;
+        # pozostale pliki - jako coo (jak drugi argument linii polecen), do biezacej klatki
+        paths = [u.toLocalFile() for u in event.mimeData().urls() if u.isLocalFile()]
+        fits_files = [p for p in paths if is_fits_name(p)]
+        coo = [p for p in paths if not is_fits_name(p) and os.path.isfile(p)]
+        event.acceptProposedAction()
+        # wyjatek w obsludze zdarzenia Qt (PyQt6) zamknalby caly program - np. zly plik coo
+        try:
+            if fits_files:
+                self.browse_files = [os.path.abspath(p) for p in fits_files] if len(fits_files) > 1 else None
+                self.fname = fits_files[0]
+                self.newFits()
+            if coo and hasattr(self, "hdu"):
+                for p in coo:
+                    self.coo_file = p
+                    self.load_coo()
+        except Exception as e:
+            self.errmssg("cannot open dropped file:\n%s" % e)
 
     def prefetch(self):
         # Nastepny plik w kierunku przegladania (strzalki) czytany w tle - trafia do pamieci podrecznej
@@ -106,13 +185,11 @@ class FitsView(QWidget):
         # samego czytania, a obrobka w FitsView ~1 s. Watek konczy sie, gdy wczytywany jest inny plik.
         self.prefetch_gen = self.prefetch_gen + 1
         gen = self.prefetch_gen
-        try:
-            lista = self.fits_list()
-            i = lista.index(os.path.basename(str(self.fname))) + self.browse_step
-        except (OSError, ValueError):
-            return
+        i, lista = self.browse_index()
+        if i is None: return
+        i = i + self.browse_step
         if not 0 <= i < len(lista): return
-        path = os.path.join(self.fits_directory, lista[i])
+        path = lista[i]
         def czytaj():
             try:
                 with open(path, "rb") as f:
@@ -122,34 +199,22 @@ class FitsView(QWidget):
         threading.Thread(target=czytaj, daemon=True).start()
 
     def nextFits(self):
-        self.browse_step = 1
-        lista = self.fits_list()
-        fname = str(os.path.basename(self.fname))
-        if fname in lista:
-            i = lista.index(fname)
-            if i < len(lista) - 1:
-                i = i + 1
-                self.fname = self.fits_directory+"/"+lista[i]
-                self.newFits()
-
-
+        self.browse(1)
 
     def prevFits(self):
-        self.browse_step = -1
-        lista = self.fits_list()
-        fname = str(os.path.basename(self.fname))
-        if fname in lista:
-            i = lista.index(fname)
-            if i > 0:
-                i = i - 1
-                self.fname = self.fits_directory+"/"+lista[i]
-                self.newFits()
+        self.browse(-1)
 
+    def newFits(self, keep_view=False):
+       # keep_view (przegladanie): zoom i srodek widoku zostaja, jesli nowa klatka ma ten sam rozmiar
 
-    def newFits(self):
+       if is_fits_name(self.fname):
+          old_shape, old_view = self.image_shape(), self.view
+          if self.browse_files and os.path.abspath(str(self.fname)) not in self.browse_files:
+             self.browse_files = None               # plik spoza listy z linii polecen: przegladanie katalogu
 
-       if ".fits" in self.fname:
-
+          # katalog przegladania (strzalki, lista plikow coo) = katalog pliku, nie biezacy katalog
+          # (fv inny/katalog/plik.fits: strzalki szukaly pliku w katalogu uruchomienia)
+          self.fits_directory = os.path.dirname(os.path.abspath(self.fname))
           self.prefetch_gen = self.prefetch_gen + 1      # przerywa czytanie w tle innego pliku
           QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
           self.window().setWindowTitle("loading " + os.path.basename(self.fname) + " ...")
@@ -172,6 +237,8 @@ class FitsView(QWidget):
              self.updateUI()
              self.TabWindow.setCurrentIndex(self.current_tab_n)
              #self.TabWindow.setCurrentIndex(int(self.cfg_active_tab))
+             if keep_view and old_view is not None and self.image_shape() == old_shape:
+                self.restore_view(old_view)
              self.updateCooList()
           finally:
              QApplication.restoreOverrideCursor()
@@ -435,7 +502,7 @@ class FitsView(QWidget):
             check1 = False
             plik = open(self.coo_file, 'r')
             if self.fname:
-               self.window().setWindowTitle(self.fname+"   "+self.coo_file.split("/")[-1])
+               self.window().setWindowTitle(self.title()+"   "+self.coo_file.split("/")[-1])
 
 
             if self.coo_file.endswith((".ap",".coo",".out",".als",".lst")):
@@ -525,7 +592,7 @@ class FitsView(QWidget):
 
     def updateHInfo(self):
 
-       self.window().setWindowTitle(self.fname)
+       self.window().setWindowTitle(self.title())
        self.hinfo_e.clear()
        self.hinfo_e.setFont(QtGui.QFont("Courier New"))
 

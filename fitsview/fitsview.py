@@ -38,16 +38,16 @@ def main():
     else:
         main = FitsView_gui.FitsView(cfg)          # domyslnie: panele jako osobne okna obok glownego
 
-    fits=None
+    fits_files=[]       # fv *.fits: pierwszy otwierany, wszystkie przegladane strzalkami
     mi=0
     mx=False
     my=False
     coo=False
 
-    for i,a in enumerate(sys.argv):
-        if ".fits" in a or ".fz" in a and i >= 1:
-           fits=a
-        elif os.path.isfile(a) and ".py" not in a and i >= 1:
+    for a in sys.argv[1:]:
+        if FitsView_gui.is_fits_name(a):
+           fits_files.append(a)
+        elif os.path.isfile(a) and ".py" not in a:
           coo=a
         else:
           if not mx:
@@ -60,8 +60,9 @@ def main():
     #main.config_file="special.cfg"           # load with predifined configuration file
     #main.conf()
 
-    if fits:
-       main.fname=fits
+    if fits_files:
+       if len(fits_files) > 1: main.browse_files=[os.path.abspath(f) for f in fits_files]
+       main.fname=fits_files[0]
        main.newFits()
 
     if mx and my:
